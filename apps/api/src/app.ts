@@ -192,13 +192,30 @@ export async function createApp(config: AppConfig = loadConfig()) {
     const average = data.mastery.length
       ? Math.round(data.mastery.reduce((total, item) => total + item.score, 0) / data.mastery.length)
       : 0;
+    const currentLesson = Math.min(3, Math.max(1, mastered.length + 1));
+    const currentAssessment = await content.loadAssessment(currentLesson);
+    const history = await Promise.all(
+      data.recentAttempts.map(async (attempt) => {
+        const assessment = await content.loadAssessment(attempt.lessonId);
+        return {
+          id: attempt.id,
+          lessonId: attempt.lessonId,
+          title: assessment.title,
+          kind: attempt.kind,
+          score: attempt.total,
+          occurredAt: attempt.occurredAt,
+        };
+      }),
+    );
     return {
       learner: publicUser(user),
       longTermMastery: average,
       dueReviews: data.reviews.length,
       weakItems: data.wrong.length,
-      currentLesson: Math.min(40, Math.max(1, mastered.length + 1)),
+      currentLesson,
+      currentLessonTitle: currentAssessment.title,
       dimensions: aggregateDimensions(data.mastery),
+      history,
     };
   });
 

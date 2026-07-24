@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { and, asc, eq, gte, isNull, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNull, lte, sql } from "drizzle-orm";
 import {
   attempts,
   invitations,
@@ -214,6 +214,11 @@ export class LearningRepository {
     const wrong = await this.database.query.wrongAnswers.findMany({
       where: and(eq(wrongAnswers.userId, userId), isNull(wrongAnswers.resolvedAt)),
     });
-    return { mastery, reviews, wrong };
+    const recentAttempts = await this.database.query.attempts.findMany({
+      where: eq(attempts.userId, userId),
+      orderBy: [desc(attempts.occurredAt)],
+      limit: 5,
+    });
+    return { mastery, reviews, wrong, recentAttempts };
   }
 }

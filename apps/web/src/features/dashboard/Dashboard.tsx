@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import type { DashboardData } from "../../types";
 import { AssessmentView } from "../lesson/AssessmentView";
+import { ProfileSettings } from "../profile/ProfileSettings";
 
 const navItems = [
   ["today", "今日学习", Sparkles],
@@ -23,6 +24,7 @@ const navItems = [
   ["vocabulary", "生词本", NotebookTabs],
   ["report", "学习报告", BarChart3],
 ] as const;
+type ActiveSection = (typeof navItems)[number][0] | "settings";
 
 export function Dashboard({
   data,
@@ -35,7 +37,7 @@ export function Dashboard({
   onRefresh: () => Promise<void>;
   onLogout: () => void;
 }) {
-  const [active, setActive] = useState<(typeof navItems)[number][0]>("today");
+  const [active, setActive] = useState<ActiveSection>("today");
   const [assessmentOpen, setAssessmentOpen] = useState(false);
 
   if (assessmentOpen) {
@@ -72,18 +74,25 @@ export function Dashboard({
       <main className="dashboard">
         <header className="topbar">
           <div>
-            <h1>{active === "today" ? "下午好，今天先巩固，再向前一步" : navItems.find(([id]) => id === active)?.[1]}</h1>
-            <p>{active === "today" ? "依据遗忘曲线与掌握情况，为你生成个性化学习计划。" : "该模块将在第一阶段后续迭代中接入真实数据。"}</p>
+            <h1>{active === "today" ? "下午好，今天先巩固，再向前一步" : active === "settings" ? "个人设置" : navItems.find(([id]) => id === active)?.[1]}</h1>
+            <p>{active === "today" ? "依据遗忘曲线与掌握情况，为你生成个性化学习计划。" : active === "settings" ? "管理你的昵称、学习目标和发音偏好。" : "该模块将在第一阶段后续迭代中接入真实数据。"}</p>
           </div>
-          <div className="top-actions"><button aria-label="提醒"><Bell size={20} /></button><button aria-label="设置"><Settings size={20} /></button></div>
+          <div className="top-actions"><button aria-label="提醒"><Bell size={20} /></button><button aria-label="设置" onClick={() => setActive("settings")}><Settings size={20} /></button></div>
         </header>
 
-        {active === "today" ? (
+        {active === "settings" ? (
+          <ProfileSettings
+            user={data.learner}
+            demo={demo}
+            onBack={() => setActive("today")}
+            onSaved={onRefresh}
+          />
+        ) : active === "today" ? (
           <div className="dashboard-grid">
             <section className="today-column">
               <button className="current-lesson" onClick={() => setAssessmentOpen(true)}>
                 <BookOpen size={34} strokeWidth={1.6} />
-                <span><small>当前学习</small><strong>第 {String(data.currentLesson).padStart(2, "0")} 课　电脑</strong></span>
+                <span><small>当前学习</small><strong>第 {String(data.currentLesson).padStart(2, "0")} 课　{data.currentLessonTitle}</strong></span>
                 <ChevronRight />
               </button>
 
@@ -104,16 +113,17 @@ export function Dashboard({
               <section className="history">
                 <div className="section-heading"><h2>最近学习记录</h2><button>查看全部</button></div>
                 <div className="history-table" role="table">
-                  {[
-                    ["07", "智能手机", "今天 10:32", "待巩固"],
-                    ["06", "电子邮件", "昨天 20:15", "已掌握"],
-                    ["05", "互联网", "06-01 18:40", "长期掌握"],
-                  ].map(([lesson, title, time, status]) => (
-                    <button className="history-row" role="row" key={lesson}>
-                      <span>第 {lesson} 课</span><strong>{title}</strong><span>听力 · 精读 · 跟读 · 听写</span><time>{time}</time>
-                      <em data-status={status}>{status}</em><ChevronRight size={17} />
+                  {data.history.map((item) => {
+                    const status = item.score >= 90 ? "长期掌握" : item.score >= 80 ? "已掌握" : "待巩固";
+                    return (
+                    <button className="history-row" role="row" key={item.id}>
+                      <span>第 {String(item.lessonId).padStart(2, "0")} 课</span><strong>{item.title}</strong><span>{item.kind === "practice" ? "练习" : item.kind === "review" ? "计划复习" : "正式考核"}</span>
+                      <time>{formatAttemptTime(item.occurredAt)}</time>
+                      <em data-status={status}>{item.score} · {status}</em><ChevronRight size={17} />
                     </button>
-                  ))}
+                    );
+                  })}
+                  {!data.history.length && <p className="empty-history">完成第一次正式考核后，学习记录会出现在这里。</p>}
                 </div>
               </section>
             </section>
@@ -134,6 +144,15 @@ export function Dashboard({
       </main>
     </div>
   );
+}
+
+function formatAttemptTime(value: string) {
+  return new Intl.DateTimeFormat("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
 }
 
 function PlanStop({

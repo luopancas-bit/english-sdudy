@@ -14,7 +14,13 @@ export const demoDashboard: DashboardData = {
   dueReviews: 4,
   weakItems: 3,
   currentLesson: 8,
+  currentLessonTitle: "电脑 · Computer",
   dimensions: { listening: 74, reading: 82, speaking: 61, writing: 66 },
+  history: [
+    { id: "demo-7", lessonId: 7, title: "智能手机", kind: "formal", score: 68, occurredAt: "2026-07-24T02:32:00Z" },
+    { id: "demo-6", lessonId: 6, title: "电子邮件", kind: "review", score: 84, occurredAt: "2026-07-23T12:15:00Z" },
+    { id: "demo-5", lessonId: 5, title: "互联网", kind: "review", score: 92, occurredAt: "2026-07-21T10:40:00Z" },
+  ],
 };
 
 export const demoAssessment: Assessment = {

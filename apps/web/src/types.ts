@@ -14,12 +14,21 @@ export interface DashboardData {
   dueReviews: number;
   weakItems: number;
   currentLesson: number;
+  currentLessonTitle: string;
   dimensions: {
     listening: number;
     reading: number;
     speaking: number;
     writing: number;
   };
+  history: Array<{
+    id: string;
+    lessonId: number;
+    title: string;
+    kind: "formal" | "practice" | "review";
+    score: number;
+    occurredAt: string;
+  }>;
 }
 
 export interface Assessment {

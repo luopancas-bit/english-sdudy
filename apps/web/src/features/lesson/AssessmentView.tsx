@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, ArrowRight, Check, Headphones, Mic, PenLine, ScrollText } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Headphones, Mic, PenLine, ScrollText, Target } from "lucide-react";
 import { api } from "../../api";
 import { demoAssessment } from "../../demo";
-import type { Assessment } from "../../types";
+import type { Assessment, AttemptResult } from "../../types";
 
 const dimensionNames = {
   listening: "听力",
@@ -32,6 +32,7 @@ export function AssessmentView({
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [result, setResult] = useState<AttemptResult | null>(null);
 
   useEffect(() => {
     if (!demo) api.assessment(lessonId).then(setAssessment);
@@ -49,18 +50,30 @@ export function AssessmentView({
       return;
     }
     if (demo) {
-      onClose();
+      setResult({
+        attemptId: "demo-attempt",
+        countsTowardMastery: true,
+        scores: { listening: 80, reading: 70, speaking: 0, writing: 0 },
+        mastery: {
+          score: 59,
+          band: "introduced",
+          dimensions: { listening: 80, reading: 70, speaking: 0, writing: 0 },
+        },
+      });
       return;
     }
     setSubmitting(true);
     setError("");
     try {
-      await api.submitAttempt(lessonId, answers);
-      onClose();
+      setResult(await api.submitAttempt(lessonId, answers));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "提交失败，请稍后重试");
       setSubmitting(false);
     }
+  }
+
+  if (result) {
+    return <AssessmentResult result={result} lessonTitle={assessment.title} onDone={onClose} />;
   }
 
   return (
@@ -92,6 +105,44 @@ export function AssessmentView({
             {submitting ? "正在提交…" : finalQuestion ? "提交考核" : "下一题"}<ArrowRight size={18} />
           </button>
         </footer>
+      </section>
+    </main>
+  );
+}
+
+function AssessmentResult({
+  result,
+  lessonTitle,
+  onDone,
+}: {
+  result: AttemptResult;
+  lessonTitle: string;
+  onDone: () => void;
+}) {
+  const passed = result.mastery.score >= 80;
+  return (
+    <main className="assessment-result-page">
+      <section className="result-sheet">
+        <div className={`result-seal ${passed ? "passed" : ""}`}><Target size={30} /></div>
+        <span>正式考核结果</span>
+        <h1>{lessonTitle}</h1>
+        <div className="result-score"><strong>{result.mastery.score}</strong><small>/ 100</small></div>
+        <p>
+          {passed
+            ? "本课已达到掌握标准，系统仍会按计划安排复习。"
+            : "本次结果已进入复习计划，你仍然可以继续学习下一课。"}
+        </p>
+        <div className="result-dimensions">
+          {Object.entries(dimensionNames).map(([key, label]) => (
+            <div key={key}><span>{label}</span><strong>{result.scores[key as keyof typeof result.scores]}</strong></div>
+          ))}
+        </div>
+        <div className="result-rule">
+          {result.countsTowardMastery
+            ? "这是今天第一次正式考核，成绩已计入最近三次加权。"
+            : "今天已有正式成绩，本次完整保留用于复盘，但不重复计入掌握率。"}
+        </div>
+        <button className="primary-button" onClick={onDone}>返回今日学习<ArrowRight size={18} /></button>
       </section>
     </main>
   );
