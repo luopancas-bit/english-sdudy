@@ -1,0 +1,21 @@
+{
+  "name": "zhuguang-english",
+  "version": "2.0.0",
+  "private": true,
+  "packageManager": "pnpm@10.14.0",
+  "scripts": {
+    "dev": "pnpm --parallel --filter @zhuguang/api --filter @zhuguang/web dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "test:unit": "pnpm --filter @zhuguang/domain test",
+    "test:e2e": "playwright test",
+    "db:bootstrap": "pnpm --filter @zhuguang/api db:bootstrap",
+    "check": "pnpm typecheck && pnpm test && pnpm build"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.54.2",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
+  }
+}

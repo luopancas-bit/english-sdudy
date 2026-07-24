@@ -1,0 +1,20 @@
+import { z } from "zod";
+
+const configSchema = z.object({
+  NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+  HOST: z.string().default("0.0.0.0"),
+  PORT: z.coerce.number().int().positive().default(8787),
+  DATABASE_URL: z.string().default("file:./data/english-study.sqlite"),
+  CONTENT_DIR: z.string().default("./content-private"),
+  SESSION_COOKIE_NAME: z.string().default("zhuguang_session"),
+  SESSION_TTL_DAYS: z.coerce.number().int().min(1).max(90).default(30),
+  SESSION_SECRET: z.string().min(32),
+  BOOTSTRAP_ADMIN_USERNAME: z.string().min(3).optional(),
+  BOOTSTRAP_ADMIN_PASSWORD: z.string().min(12).optional(),
+});
+
+export type AppConfig = z.infer<typeof configSchema>;
+
+export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppConfig {
+  return configSchema.parse(environment);
+}

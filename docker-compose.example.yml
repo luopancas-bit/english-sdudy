@@ -1,0 +1,27 @@
+services:
+  english-study:
+    build: .
+    image: office-english-study:2.0.0
+    container_name: office-english-study-v2
+    restart: unless-stopped
+    env_file:
+      - ${SECRETS_DIR:?set SECRETS_DIR}/english-study-v2.env
+    ports:
+      - "${BIND_IP:-127.0.0.1}:${HOST_PORT:-18788}:8787"
+    volumes:
+      - ${DATA_ROOT:?set DATA_ROOT}/data:/app/data
+      - ${DATA_ROOT:?set DATA_ROOT}/content:/app/content-private:ro
+      - ${DATA_ROOT:?set DATA_ROOT}/recordings:/app/recordings
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - office_net
+
+networks:
+  office_net:
+    external: true

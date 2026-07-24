@@ -1,0 +1,43 @@
+# Dependencies and build output
+node_modules/
+dist/
+coverage/
+playwright-report/
+test-results/
+*.tsbuildinfo
+
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+secrets/
+
+# Runtime databases and personal learning data
+data/
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
+recordings/
+backups/
+
+# Private or licensed curriculum assets
+content-private/
+app/
+public/
+src/data/
+public/audio/
+public/source/
+public/phonics/
+public/assets/map-background.png
+vendor/
+scripts/extract-mdict-resource.py
+
+# Local design and QA artifacts
+docs/design/*.png
+!docs/design/README.md
+tmp/
+.DS_Store
