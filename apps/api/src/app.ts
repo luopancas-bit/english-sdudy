@@ -4,7 +4,7 @@ import cookie from "@fastify/cookie";
 import cors from "@fastify/cors";
 import staticFiles from "@fastify/static";
 import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
-import { createDatabase, migrate } from "@zhuguang/database";
+import { createDatabase, migrate, type Database } from "@zhuguang/database";
 import {
   calculateMastery,
   scheduleReview,
@@ -40,13 +40,35 @@ const submissionSchema = z.object({
   answers: z.record(z.string(), z.string()),
 });
 
-export async function createApp(config: AppConfig = loadConfig()) {
+const vocabularySchema = z.object({
+  term: z.string().trim().min(1).max(80),
+  meaning: z.string().trim().min(1).max(160),
+  example: z.string().trim().max(500).nullable().optional(),
+  lessonId: z.number().int().min(1).max(40).nullable().optional(),
+});
+
+const vocabularyStatusSchema = z.object({
+  status: z.enum(["learning", "mastered"]),
+});
+
+const vocabularyParamsSchema = z.object({
+  entryId: z.string().uuid(),
+});
+
+const COURSE_MAP_LESSON_COUNT = 3;
+
+export async function createApp(
+  config: AppConfig = loadConfig(),
+  database: Database = createDatabase(config.DATABASE_URL),
+) {
   const app = Fastify({ logger: true, bodyLimit: 1_000_000 });
   const authAttempts = new Map<string, { count: number; resetAt: number }>();
-  const database = createDatabase(config.DATABASE_URL);
   await migrate(database);
   const repository = new LearningRepository(database);
   const content = new ContentModule(config.CONTENT_DIR);
+  app.addHook("onClose", async () => {
+    database.$client.close();
+  });
 
   await app.register(cookie);
   await app.register(cors, {
@@ -219,6 +241,146 @@ export async function createApp(config: AppConfig = loadConfig()) {
     };
   });
 
+  app.get("/api/review-center", async (request, reply) => {
+    const user = await requireUser(request, reply);
+    if (!user) return;
+    const now = new Date().toISOString();
+    const data = await repository.reviewCenter(user.id);
+
+    const lessonIds = new Set([
+      ...data.reviews.map((item) => item.lessonId),
+      ...data.wrong.map((item) => item.lessonId),
+    ]);
+    const assessmentEntries = await Promise.all(
+      Array.from(lessonIds, async (lessonId) => [lessonId, await content.loadAssessment(lessonId)] as const),
+    );
+    const assessments = new Map(assessmentEntries);
+
+    const reviews = data.reviews.map((item) => ({
+      lessonId: item.lessonId,
+      title: assessments.get(item.lessonId)?.title ?? `第 ${item.lessonId} 课`,
+      dueAt: item.dueAt,
+      step: item.step,
+      weakDimensions: item.weakDimensions,
+    }));
+    const wrongAnswers = data.wrong.flatMap((item) => {
+      const assessment = assessments.get(item.lessonId);
+      const question = assessment?.questions.find((candidate) => candidate.id === item.questionId);
+      if (!assessment || !question) return [];
+      return [{
+        lessonId: item.lessonId,
+        lessonTitle: assessment.title,
+        questionId: item.questionId,
+        dimension: item.dimension,
+        prompt: question.prompt,
+        sourceSentence: question.sourceSentence,
+        lastAnswer: item.lastAnswer,
+        errorCount: item.errorCount,
+        updatedAt: item.updatedAt,
+      }];
+    });
+
+    return {
+      due: reviews.filter((item) => item.dueAt <= now),
+      upcoming: reviews.filter((item) => item.dueAt > now),
+      wrongAnswers,
+    };
+  });
+
+  app.get("/api/course-map", async (request, reply) => {
+    const user = await requireUser(request, reply);
+    if (!user) return;
+    const now = new Date().toISOString();
+    const lessonIds = Array.from({ length: COURSE_MAP_LESSON_COUNT }, (_item, index) => index + 1);
+    const [data, assessments] = await Promise.all([
+      repository.courseMap(user.id),
+      Promise.all(lessonIds.map((lessonId) => content.loadAssessment(lessonId))),
+    ]);
+    const masteryByLesson = new Map(data.mastery.map((item) => [item.lessonId, item]));
+    const reviewByLesson = new Map(data.reviews.map((item) => [item.lessonId, item]));
+    const formalLessonIds = new Set(
+      data.attempts.filter((item) => item.kind !== "practice").map((item) => item.lessonId),
+    );
+
+    const lessons = assessments.map((assessment) => {
+      const mastery = masteryByLesson.get(assessment.lessonId);
+      const review = reviewByLesson.get(assessment.lessonId);
+      const unlocked = assessment.lessonId === 1 || formalLessonIds.has(assessment.lessonId - 1);
+      const state = !unlocked
+        ? "locked"
+        : !mastery
+          ? "ready"
+          : review && review.dueAt <= now
+            ? "review-due"
+            : mastery.band === "long-term"
+              ? "long-term"
+              : ["mastered", "proficient"].includes(mastery.band)
+                ? "mastered"
+                : "strengthening";
+      return {
+        lessonId: assessment.lessonId,
+        title: assessment.title,
+        unlocked,
+        state,
+        score: mastery?.score ?? null,
+        band: mastery?.band ?? null,
+        review: review
+          ? {
+              dueAt: review.dueAt,
+              step: review.step,
+              weakDimensions: review.weakDimensions,
+            }
+          : null,
+      };
+    });
+    const visibleMastery = data.mastery.filter((item) => lessonIds.includes(item.lessonId));
+
+    return {
+      summary: {
+        totalLessons: COURSE_MAP_LESSON_COUNT,
+        studiedLessons: lessonIds.filter((lessonId) => formalLessonIds.has(lessonId)).length,
+        masteredLessons: visibleMastery.filter((item) =>
+          ["mastered", "proficient", "long-term"].includes(item.band),
+        ).length,
+        averageScore: visibleMastery.length
+          ? Math.round(visibleMastery.reduce((total, item) => total + item.score, 0) / visibleMastery.length)
+          : 0,
+      },
+      lessons,
+    };
+  });
+
+  app.get("/api/vocabulary", async (request, reply) => {
+    const user = await requireUser(request, reply);
+    if (!user) return;
+    const entries = await repository.listVocabulary(user.id);
+    return vocabularyResponse(entries.map(publicVocabularyEntry));
+  });
+
+  app.post("/api/vocabulary", async (request, reply) => {
+    const user = await requireUser(request, reply);
+    if (!user) return;
+    const body = vocabularySchema.parse(request.body);
+    const entry = await repository.saveVocabularyEntry({
+      userId: user.id,
+      term: body.term,
+      normalizedTerm: normalizeVocabularyTerm(body.term),
+      meaning: body.meaning,
+      example: body.example || null,
+      lessonId: body.lessonId ?? null,
+    });
+    return entry ? reply.code(201).send(publicVocabularyEntry(entry)) : reply.code(500).send({ error: "生词保存失败" });
+  });
+
+  app.patch("/api/vocabulary/:entryId", async (request, reply) => {
+    const user = await requireUser(request, reply);
+    if (!user) return;
+    const { entryId } = vocabularyParamsSchema.parse(request.params);
+    const { status } = vocabularyStatusSchema.parse(request.body);
+    const entry = await repository.updateVocabularyStatus(user.id, entryId, status);
+    return entry ? publicVocabularyEntry(entry) : reply.code(404).send({ error: "生词不存在" });
+  });
+
   app.get("/api/lessons/:lessonId/assessment", async (request, reply) => {
     const user = await requireUser(request, reply);
     if (!user) return;
@@ -250,11 +412,13 @@ export async function createApp(config: AppConfig = loadConfig()) {
     const mastery = calculateMastery(history, now);
     const previousReview = await repository.getReviewState(user.id, lessonId);
     let review: ReviewDecision | null = null;
-    await repository.saveMastery(user.id, lessonId, mastery);
     const countsTowardMastery = mastery.formalAttemptIds.includes(attemptId);
-    if (countsTowardMastery) {
-      review = scheduleReview(previousReview ?? null, scores, now);
-      await repository.saveReview(user.id, lessonId, review);
+    if (body.kind !== "practice") {
+      await repository.saveMastery(user.id, lessonId, mastery);
+      if (countsTowardMastery) {
+        review = scheduleReview(previousReview ?? null, scores, now);
+        await repository.saveReview(user.id, lessonId, review);
+      }
     }
     await repository.saveWrongAnswers(user.id, lessonId, graded.details);
     return reply.code(201).send({
@@ -314,4 +478,47 @@ function aggregateDimensions(
       ),
     ]),
   );
+}
+
+function publicVocabularyEntry(entry: {
+  id: string;
+  term: string;
+  meaning: string;
+  example: string | null;
+  lessonId: number | null;
+  status: "learning" | "mastered";
+  createdAt: string;
+  updatedAt: string;
+}) {
+  return {
+    id: entry.id,
+    term: entry.term,
+    meaning: entry.meaning,
+    example: entry.example,
+    lessonId: entry.lessonId,
+    status: entry.status,
+    createdAt: entry.createdAt,
+    updatedAt: entry.updatedAt,
+  };
+}
+
+function vocabularyResponse<T extends { status: string }>(entries: T[]) {
+  let learning = 0;
+  let mastered = 0;
+  for (const entry of entries) {
+    if (entry.status === "mastered") mastered += 1;
+    else learning += 1;
+  }
+  return {
+    summary: {
+      total: entries.length,
+      learning,
+      mastered,
+    },
+    entries,
+  };
+}
+
+function normalizeVocabularyTerm(term: string) {
+  return term.trim().toLocaleLowerCase("en-US").replace(/\s+/g, " ");
 }

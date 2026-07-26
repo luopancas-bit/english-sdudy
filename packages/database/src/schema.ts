@@ -120,3 +120,23 @@ export const wrongAnswers = sqliteTable(
     index("wrong_answers_user_idx").on(table.userId, table.resolvedAt),
   ],
 );
+
+export const vocabularyEntries = sqliteTable(
+  "vocabulary_entries",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    term: text("term").notNull(),
+    normalizedTerm: text("normalized_term").notNull(),
+    meaning: text("meaning").notNull(),
+    example: text("example"),
+    lessonId: integer("lesson_id"),
+    status: text("status", { enum: ["learning", "mastered"] }).notNull().default("learning"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("vocabulary_user_normalized_unique").on(table.userId, table.normalizedTerm),
+    index("vocabulary_user_status_idx").on(table.userId, table.status, table.updatedAt),
+  ],
+);

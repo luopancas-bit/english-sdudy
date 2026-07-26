@@ -95,4 +95,23 @@ export async function migrate(database: Database): Promise<void> {
       UNIQUE(user_id, question_id)
     )
   `);
+  await database.run(sql`
+    CREATE TABLE IF NOT EXISTS vocabulary_entries (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      term TEXT NOT NULL,
+      normalized_term TEXT NOT NULL,
+      meaning TEXT NOT NULL,
+      example TEXT,
+      lesson_id INTEGER,
+      status TEXT NOT NULL DEFAULT 'learning',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE(user_id, normalized_term)
+    )
+  `);
+  await database.run(sql`
+    CREATE INDEX IF NOT EXISTS vocabulary_user_status_idx
+    ON vocabulary_entries(user_id, status, updated_at)
+  `);
 }

@@ -11,11 +11,19 @@ import { hashToken } from "./security.js";
 const temporaryDirectories: string[] = [];
 
 afterEach(async () => {
-  await Promise.all(temporaryDirectories.splice(0).map((directory) => fs.rm(directory, { recursive: true, force: true })));
+  await Promise.all(
+    temporaryDirectories.splice(0).map((directory) =>
+      fs.rm(directory, {
+        recursive: true,
+        force: true,
+        maxRetries: 5,
+        retryDelay: 50,
+      })),
+  );
 });
 
 describe("learning account flow", () => {
-  it("registers, syncs a profile, records assessment history, and ignores a same-day retry", async () => {
+  it("registers, syncs a profile, records assessment history, and exposes review work", async () => {
     const directory = await fs.mkdtemp(path.join(os.tmpdir(), "zhuguang-api-"));
     temporaryDirectories.push(directory);
     const contentDirectory = path.join(directory, "content");
@@ -28,13 +36,18 @@ describe("learning account flow", () => {
       path.join(contentDirectory, "assessments", "lesson-02.json"),
       JSON.stringify({ ...syntheticAssessment(), lessonId: 2, title: "第二合成课程" }),
     );
+    await fs.writeFile(
+      path.join(contentDirectory, "assessments", "lesson-03.json"),
+      JSON.stringify({ ...syntheticAssessment(), lessonId: 3, title: "第三合成课程" }),
+    );
 
     const secret = "integration-test-secret-at-least-32-characters";
     const invitationCode = "SYNTHETIC-INVITE";
-    const databaseUrl = `file:${path.join(directory, "test.sqlite")}`;
+    const databaseUrl = "file::memory:";
     const database = createDatabase(databaseUrl);
     await migrate(database);
-    await new LearningRepository(database).createInvitation({
+    const repository = new LearningRepository(database);
+    await repository.createInvitation({
       codeHash: hashToken(invitationCode, secret),
       createdBy: null,
       expiresAt: new Date(Date.now() + 86_400_000).toISOString(),
@@ -50,7 +63,7 @@ describe("learning account flow", () => {
       SESSION_TTL_DAYS: 1,
       SESSION_SECRET: secret,
     };
-    const app = await createApp(config);
+    const app = await createApp(config, database);
 
     const registration = await app.inject({
       method: "POST",
@@ -74,6 +87,30 @@ describe("learning account flow", () => {
     });
     expect(profile.statusCode).toBe(200);
     expect(profile.json()).toMatchObject({ nickname: "逐光同学", dailyMinutes: 30, preferredAccent: "uk" });
+
+    const practice = await app.inject({
+      method: "POST",
+      url: "/api/lessons/1/attempts",
+      headers: { cookie },
+      payload: {
+        kind: "practice",
+        answers: { l1: "A", r1: "B", s1: "speak clearly", w1: "computer" },
+      },
+    });
+    expect(practice.statusCode).toBe(201);
+    expect(practice.json()).toMatchObject({ countsTowardMastery: false });
+
+    const mapBeforeFormal = await app.inject({
+      method: "GET",
+      url: "/api/course-map",
+      headers: { cookie },
+    });
+    expect(mapBeforeFormal.statusCode).toBe(200);
+    expect(mapBeforeFormal.json().lessons).toMatchObject([
+      { lessonId: 1, unlocked: true, state: "ready", score: null },
+      { lessonId: 2, unlocked: false, state: "locked", score: null },
+      { lessonId: 3, unlocked: false, state: "locked", score: null },
+    ]);
 
     const payload = {
       kind: "formal",
@@ -104,8 +141,109 @@ describe("learning account flow", () => {
       learner: { nickname: "逐光同学" },
       currentLesson: 2,
     });
-    expect(dashboardBody.history).toHaveLength(2);
+    expect(dashboardBody.history).toHaveLength(3);
     expect(dashboardBody.history[0]).toMatchObject({ lessonId: 1, title: "合成课程", score: 100 });
+
+    const weakAttempt = await app.inject({
+      method: "POST",
+      url: "/api/lessons/2/attempts",
+      headers: { cookie },
+      payload: {
+        kind: "formal",
+        answers: { l1: "B", r1: "A", s1: "", w1: "wrong" },
+      },
+    });
+    expect(weakAttempt.statusCode).toBe(201);
+    expect(weakAttempt.json()).toMatchObject({ countsTowardMastery: true, mastery: { score: 0 } });
+
+    await repository.saveReview(registration.json().id, 2, {
+      step: 1,
+      dueAt: new Date(Date.now() - 60_000).toISOString(),
+      consecutiveExcellent: 0,
+      result: "restart",
+      weakDimensions: ["listening", "reading", "speaking", "writing"],
+    });
+
+    const reviewCenter = await app.inject({
+      method: "GET",
+      url: "/api/review-center",
+      headers: { cookie },
+    });
+    expect(reviewCenter.statusCode).toBe(200);
+    expect(reviewCenter.json()).toMatchObject({
+      due: [{ lessonId: 2, title: "第二合成课程", weakDimensions: ["listening", "reading", "speaking", "writing"] }],
+      upcoming: [{ lessonId: 1, title: "合成课程" }],
+    });
+    expect(reviewCenter.json().wrongAnswers).toHaveLength(4);
+    expect(reviewCenter.json().wrongAnswers[0]).toMatchObject({
+      lessonId: 2,
+      prompt: expect.any(String),
+      sourceSentence: expect.any(String),
+      errorCount: 1,
+    });
+
+    const courseMap = await app.inject({
+      method: "GET",
+      url: "/api/course-map",
+      headers: { cookie },
+    });
+    expect(courseMap.statusCode).toBe(200);
+    expect(courseMap.json()).toMatchObject({
+      summary: {
+        totalLessons: 3,
+        studiedLessons: 2,
+        masteredLessons: 1,
+        averageScore: 50,
+      },
+      lessons: [
+        { lessonId: 1, title: "合成课程", unlocked: true, state: "mastered", score: 100 },
+        { lessonId: 2, title: "第二合成课程", unlocked: true, state: "review-due", score: 0 },
+        { lessonId: 3, title: "第三合成课程", unlocked: true, state: "ready", score: null },
+      ],
+    });
+
+    const vocabularyCreate = await app.inject({
+      method: "POST",
+      url: "/api/vocabulary",
+      headers: { cookie },
+      payload: {
+        term: "Computer",
+        meaning: "电脑",
+        example: "The computer helps me organize my work.",
+        lessonId: 1,
+      },
+    });
+    expect(vocabularyCreate.statusCode).toBe(201);
+    expect(vocabularyCreate.json()).toMatchObject({
+      term: "Computer",
+      meaning: "电脑",
+      status: "learning",
+    });
+
+    const vocabularyList = await app.inject({
+      method: "GET",
+      url: "/api/vocabulary",
+      headers: { cookie },
+    });
+    expect(vocabularyList.statusCode).toBe(200);
+    expect(vocabularyList.json()).toMatchObject({
+      summary: { total: 1, learning: 1, mastered: 0 },
+      entries: [{ id: vocabularyCreate.json().id, term: "Computer" }],
+    });
+    expect(vocabularyList.json().entries[0]).not.toHaveProperty("userId");
+    expect(vocabularyList.json().entries[0]).not.toHaveProperty("normalizedTerm");
+
+    const vocabularyMastered = await app.inject({
+      method: "PATCH",
+      url: `/api/vocabulary/${vocabularyCreate.json().id}`,
+      headers: { cookie },
+      payload: { status: "mastered" },
+    });
+    expect(vocabularyMastered.statusCode).toBe(200);
+    expect(vocabularyMastered.json()).toMatchObject({
+      id: vocabularyCreate.json().id,
+      status: "mastered",
+    });
 
     await app.close();
   });

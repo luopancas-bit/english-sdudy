@@ -14,8 +14,11 @@ import {
   Target,
 } from "lucide-react";
 import type { DashboardData } from "../../types";
+import { CourseMap } from "../map/CourseMap";
 import { AssessmentView } from "../lesson/AssessmentView";
 import { ProfileSettings } from "../profile/ProfileSettings";
+import { ReviewCenter } from "../review/ReviewCenter";
+import { VocabularyBook } from "../vocabulary/VocabularyBook";
 
 const navItems = [
   ["today", "今日学习", Sparkles],
@@ -38,15 +41,19 @@ export function Dashboard({
   onLogout: () => void;
 }) {
   const [active, setActive] = useState<ActiveSection>("today");
-  const [assessmentOpen, setAssessmentOpen] = useState(false);
+  const [assessmentSession, setAssessmentSession] = useState<{
+    lessonId: number;
+    kind: "formal" | "review";
+  } | null>(null);
 
-  if (assessmentOpen) {
+  if (assessmentSession) {
     return (
       <AssessmentView
-        lessonId={data.currentLesson}
+        lessonId={assessmentSession.lessonId}
+        kind={assessmentSession.kind}
         demo={demo}
         onClose={() => {
-          setAssessmentOpen(false);
+          setAssessmentSession(null);
           void onRefresh();
         }}
       />
@@ -75,7 +82,7 @@ export function Dashboard({
         <header className="topbar">
           <div>
             <h1>{active === "today" ? "下午好，今天先巩固，再向前一步" : active === "settings" ? "个人设置" : navItems.find(([id]) => id === active)?.[1]}</h1>
-            <p>{active === "today" ? "依据遗忘曲线与掌握情况，为你生成个性化学习计划。" : active === "settings" ? "管理你的昵称、学习目标和发音偏好。" : "该模块将在第一阶段后续迭代中接入真实数据。"}</p>
+            <p>{active === "today" ? "依据遗忘曲线与掌握情况，为你生成个性化学习计划。" : active === "settings" ? "管理你的昵称、学习目标和发音偏好。" : active === "map" ? "依次完成正式考核，解锁下一课；复习到期时优先巩固。" : active === "review" ? "按到期时间巩固记忆，并集中处理反复出错的内容。" : active === "vocabulary" ? "收藏需要反复接触的单词与短语，掌握后随时归档。" : "该模块将在第一阶段后续迭代中接入真实数据。"}</p>
           </div>
           <div className="top-actions"><button aria-label="提醒"><Bell size={20} /></button><button aria-label="设置" onClick={() => setActive("settings")}><Settings size={20} /></button></div>
         </header>
@@ -90,7 +97,7 @@ export function Dashboard({
         ) : active === "today" ? (
           <div className="dashboard-grid">
             <section className="today-column">
-              <button className="current-lesson" onClick={() => setAssessmentOpen(true)}>
+              <button className="current-lesson" onClick={() => setAssessmentSession({ lessonId: data.currentLesson, kind: "formal" })}>
                 <BookOpen size={34} strokeWidth={1.6} />
                 <span><small>当前学习</small><strong>第 {String(data.currentLesson).padStart(2, "0")} 课　{data.currentLessonTitle}</strong></span>
                 <ChevronRight />
@@ -105,7 +112,7 @@ export function Dashboard({
                 <PlanStop icon={<Clock3 />} title="到期复习" duration="12 分钟" note="巩固记忆，夯实基础" x="7%" y="61%" />
                 <PlanStop icon={<Target />} title="薄弱项" duration="6 分钟" note="攻克弱点，提升能力" x="39%" y="42%" tone="gold" />
                 <PlanStop icon={<BookOpen />} title="新课学习" duration="10 分钟" note="学习新知，向前一步" x="68%" y="21%" />
-                <button className="start-orb" onClick={() => setAssessmentOpen(true)}>
+                <button className="start-orb" onClick={() => setAssessmentSession({ lessonId: data.currentLesson, kind: "formal" })}>
                   <img src="/brand-mark.svg" alt="" /><span>开始今日学习</span><small>预计用时 28 分钟</small>
                 </button>
               </div>
@@ -138,6 +145,18 @@ export function Dashboard({
               <div className="next-review"><h3>下一次复习</h3><time>今天 18:30</time><strong>第 05 课　互联网</strong><span>待巩固</span></div>
             </aside>
           </div>
+        ) : active === "review" ? (
+          <ReviewCenter
+            demo={demo}
+            onStartReview={(lessonId) => setAssessmentSession({ lessonId, kind: "review" })}
+          />
+        ) : active === "map" ? (
+          <CourseMap
+            demo={demo}
+            onStartAssessment={(lessonId, kind) => setAssessmentSession({ lessonId, kind })}
+          />
+        ) : active === "vocabulary" ? (
+          <VocabularyBook demo={demo} />
         ) : (
           <section className="module-placeholder"><BookOpen size={48} /><h2>{navItems.find(([id]) => id === active)?.[1]}</h2><p>数据模块边界已经保留，将按第一阶段顺序接入。</p></section>
         )}

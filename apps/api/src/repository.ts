@@ -7,6 +7,7 @@ import {
   reviewQueue,
   sessions,
   users,
+  vocabularyEntries,
   wrongAnswers,
   type Database,
 } from "@zhuguang/database";
@@ -201,6 +202,88 @@ export class LearningRepository {
           });
       }
     }
+  }
+
+  async reviewCenter(userId: string) {
+    const reviews = await this.database.query.reviewQueue.findMany({
+      where: eq(reviewQueue.userId, userId),
+      orderBy: [asc(reviewQueue.dueAt)],
+    });
+    const wrong = await this.database.query.wrongAnswers.findMany({
+      where: and(eq(wrongAnswers.userId, userId), isNull(wrongAnswers.resolvedAt)),
+      orderBy: [desc(wrongAnswers.updatedAt)],
+    });
+    return { reviews, wrong };
+  }
+
+  async courseMap(userId: string) {
+    const [mastery, reviews, attemptRows] = await Promise.all([
+      this.database.query.lessonMastery.findMany({
+        where: eq(lessonMastery.userId, userId),
+      }),
+      this.database.query.reviewQueue.findMany({
+        where: eq(reviewQueue.userId, userId),
+      }),
+      this.database.query.attempts.findMany({
+        where: eq(attempts.userId, userId),
+        orderBy: [desc(attempts.occurredAt)],
+      }),
+    ]);
+    return { mastery, reviews, attempts: attemptRows };
+  }
+
+  listVocabulary(userId: string) {
+    return this.database.query.vocabularyEntries.findMany({
+      where: eq(vocabularyEntries.userId, userId),
+      orderBy: [desc(vocabularyEntries.updatedAt)],
+    });
+  }
+
+  async saveVocabularyEntry(input: {
+    userId: string;
+    term: string;
+    normalizedTerm: string;
+    meaning: string;
+    example: string | null;
+    lessonId: number | null;
+  }) {
+    const now = new Date().toISOString();
+    await this.database
+      .insert(vocabularyEntries)
+      .values({
+        id: crypto.randomUUID(),
+        status: "learning",
+        createdAt: now,
+        updatedAt: now,
+        ...input,
+      })
+      .onConflictDoUpdate({
+        target: [vocabularyEntries.userId, vocabularyEntries.normalizedTerm],
+        set: {
+          term: input.term,
+          meaning: input.meaning,
+          example: input.example,
+          lessonId: input.lessonId,
+          status: "learning",
+          updatedAt: now,
+        },
+      });
+    return this.database.query.vocabularyEntries.findFirst({
+      where: and(
+        eq(vocabularyEntries.userId, input.userId),
+        eq(vocabularyEntries.normalizedTerm, input.normalizedTerm),
+      ),
+    });
+  }
+
+  async updateVocabularyStatus(userId: string, entryId: string, status: "learning" | "mastered") {
+    await this.database
+      .update(vocabularyEntries)
+      .set({ status, updatedAt: new Date().toISOString() })
+      .where(and(eq(vocabularyEntries.id, entryId), eq(vocabularyEntries.userId, userId)));
+    return this.database.query.vocabularyEntries.findFirst({
+      where: and(eq(vocabularyEntries.id, entryId), eq(vocabularyEntries.userId, userId)),
+    });
   }
 
   async dashboard(userId: string, now: string) {

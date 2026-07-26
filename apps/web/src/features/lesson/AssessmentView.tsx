@@ -21,10 +21,12 @@ const dimensionIcons = {
 export function AssessmentView({
   lessonId,
   demo,
+  kind = "formal",
   onClose,
 }: {
   lessonId: number;
   demo: boolean;
+  kind?: "formal" | "practice" | "review";
   onClose: () => void;
 }) {
   const [assessment, setAssessment] = useState<Assessment | null>(demo ? demoAssessment : null);
@@ -65,7 +67,7 @@ export function AssessmentView({
     setSubmitting(true);
     setError("");
     try {
-      setResult(await api.submitAttempt(lessonId, answers));
+      setResult(await api.submitAttempt(lessonId, answers, kind));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "提交失败，请稍后重试");
       setSubmitting(false);
@@ -73,13 +75,13 @@ export function AssessmentView({
   }
 
   if (result) {
-    return <AssessmentResult result={result} lessonTitle={assessment.title} onDone={onClose} />;
+    return <AssessmentResult result={result} lessonTitle={assessment.title} kind={kind} onDone={onClose} />;
   }
 
   return (
     <main className="assessment-page">
       <header>
-        <button onClick={onClose}><ArrowLeft size={19} />返回今日学习</button>
+        <button onClick={onClose}><ArrowLeft size={19} />返回{kind === "review" ? "复习中心" : "今日学习"}</button>
         <div><strong>第 {String(assessment.lessonId).padStart(2, "0")} 课</strong><span>{assessment.title}</span></div>
         <span>{index + 1} / {assessment.questions.length}</span>
       </header>
@@ -87,7 +89,7 @@ export function AssessmentView({
       <section className="question-sheet">
         <div className="question-kind"><Icon size={22} /><span>{dimensionNames[question.dimension]}考核</span></div>
         <h1>{question.prompt}</h1>
-        <p>正式考核完成整组后统一显示结果，本题不会即时透露答案。</p>
+        <p>{kind === "review" ? "完成整组复习后统一显示结果，本题不会即时透露答案。" : "正式考核完成整组后统一显示结果，本题不会即时透露答案。"}</p>
         {question.options ? (
           <div className="answer-options">
             {question.options.map((option, optionIndex) => (
@@ -100,9 +102,9 @@ export function AssessmentView({
           <textarea value={answer} onChange={(event) => setAnswers((value) => ({ ...value, [question.id]: event.target.value }))} placeholder="在这里输入你的答案" />
         )}
         <footer>
-          <span>{error || "同一天仅第一次正式考核计入掌握度，练习不计分"}</span>
+          <span>{error || (kind === "review" ? "计划复习会更新掌握度和下一次复习时间" : "同一天仅第一次正式考核计入掌握度，练习不计分")}</span>
           <button disabled={!answer.trim() || submitting} onClick={continueAssessment}>
-            {submitting ? "正在提交…" : finalQuestion ? "提交考核" : "下一题"}<ArrowRight size={18} />
+            {submitting ? "正在提交…" : finalQuestion ? kind === "review" ? "提交复习" : "提交考核" : "下一题"}<ArrowRight size={18} />
           </button>
         </footer>
       </section>
@@ -113,10 +115,12 @@ export function AssessmentView({
 function AssessmentResult({
   result,
   lessonTitle,
+  kind,
   onDone,
 }: {
   result: AttemptResult;
   lessonTitle: string;
+  kind: "formal" | "practice" | "review";
   onDone: () => void;
 }) {
   const passed = result.mastery.score >= 80;
@@ -124,11 +128,13 @@ function AssessmentResult({
     <main className="assessment-result-page">
       <section className="result-sheet">
         <div className={`result-seal ${passed ? "passed" : ""}`}><Target size={30} /></div>
-        <span>正式考核结果</span>
+        <span>{kind === "review" ? "计划复习结果" : kind === "practice" ? "练习结果" : "正式考核结果"}</span>
         <h1>{lessonTitle}</h1>
         <div className="result-score"><strong>{result.mastery.score}</strong><small>/ 100</small></div>
         <p>
-          {passed
+          {kind === "review" && passed
+            ? "本次复习已达到掌握标准，下一次间隔会根据结果自动调整。"
+            : passed
             ? "本课已达到掌握标准，系统仍会按计划安排复习。"
             : "本次结果已进入复习计划，你仍然可以继续学习下一课。"}
         </p>
@@ -138,11 +144,13 @@ function AssessmentResult({
           ))}
         </div>
         <div className="result-rule">
-          {result.countsTowardMastery
+          {kind === "review"
+            ? "计划复习已记录，复习间隔与薄弱维度会按本次结果更新。"
+            : result.countsTowardMastery
             ? "这是今天第一次正式考核，成绩已计入最近三次加权。"
             : "今天已有正式成绩，本次完整保留用于复盘，但不重复计入掌握率。"}
         </div>
-        <button className="primary-button" onClick={onDone}>返回今日学习<ArrowRight size={18} /></button>
+        <button className="primary-button" onClick={onDone}>返回{kind === "review" ? "复习中心" : "今日学习"}<ArrowRight size={18} /></button>
       </section>
     </main>
   );
