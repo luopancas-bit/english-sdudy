@@ -1048,6 +1048,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 }
 .typing-word span.correct { color: var(--forest); border-color: var(--forest); transform: translateY(-2px); }
 .typing-word span.wrong { color: #b34938; border-color: #b34938; }
+.typing-word span.space {
+  min-width: clamp(10px, 1.8vw, 18px);
+  border-bottom-color: transparent;
+}
 .typing-input { width: min(590px, 100%); display: grid; gap: 9px; }
 .typing-input input {
   width: 100%;

@@ -11,6 +11,8 @@ export function normalizeTypingAnswer(value: string) {
     .trim()
     .toLocaleLowerCase("en-US")
     .replace(/[’‘]/g, "'")
+    .replace(/[—–-]/g, " ")
+    .replace(/[.,!?;:"“”()\[\]{}…]/g, "")
     .replace(/\s+/g, " ");
 }
 

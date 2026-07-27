@@ -107,7 +107,11 @@ export function QwertyTraining({
               : character.toLocaleLowerCase("en-US") === typed
                 ? "correct"
                 : "wrong";
-            return <span className={state} key={`${characterIndex}-${character}`}>{character === " " ? "·" : character}</span>;
+            return (
+              <span className={`${state} ${character === " " ? "space" : ""}`} key={`${characterIndex}-${character}`}>
+                {character}
+              </span>
+            );
           })}
         </div>
 
@@ -132,7 +136,7 @@ export function QwertyTraining({
               ? "这个字符不正确，请退格修正"
               : evaluation.isComplete
                 ? "输入正确，按 Enter 记录并继续"
-                : "错误必须修正，首次错误会保留在训练记录中"}
+                : "按标准拼写输入；句号、逗号等标点可以省略"}
           </small>
         </label>
 
