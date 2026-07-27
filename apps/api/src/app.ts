@@ -551,6 +551,12 @@ export async function createApp(
       : reply.code(404).send({ error: "训练词条不存在" });
   });
 
+  app.get("/api/word-memory/chapters", async (request, reply) => {
+    const user = await requireUser(request, reply);
+    if (!user) return;
+    return { chapters: await content.wordMemoryChapters() };
+  });
+
   app.get("/api/lessons/:lessonId/assessment", async (request, reply) => {
     const user = await requireUser(request, reply);
     if (!user) return;
@@ -561,7 +567,7 @@ export async function createApp(
   app.get("/api/lessons/:lessonId", async (request, reply) => {
     const user = await requireUser(request, reply);
     if (!user) return;
-    const lessonId = z.coerce.number().int().min(1).max(COURSE_MAP_LESSON_COUNT)
+    const lessonId = z.coerce.number().int().min(1).max(40)
       .parse((request.params as { lessonId: string }).lessonId);
     return content.publicLesson(lessonId);
   });

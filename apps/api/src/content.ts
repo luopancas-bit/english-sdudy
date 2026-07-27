@@ -56,6 +56,13 @@ export type PublicAssessment = Omit<Assessment, "questions"> & {
 export type PublicLesson = Omit<Lesson, "audio"> & {
   audio: { us: string | null; uk: string | null };
 };
+export type WordMemoryChapter = {
+  lessonId: number;
+  titleEn: string;
+  titleZh: string;
+  vocabularyCount: number;
+  sentenceCount: number;
+};
 
 export class ContentModule {
   constructor(private readonly contentDirectory: string) {}
@@ -74,6 +81,17 @@ export class ContentModule {
     );
     if (!candidate) throw new Error(`Lesson ${lessonId} does not exist`);
     return lessonSchema.parse(candidate);
+  }
+
+  async wordMemoryChapters(): Promise<WordMemoryChapter[]> {
+    const raw = await fs.readFile(path.join(this.contentDirectory, "lessons.json"), "utf8");
+    return z.array(lessonSchema).parse(JSON.parse(raw)).map((lesson) => ({
+      lessonId: lesson.id,
+      titleEn: lesson.titleEn,
+      titleZh: lesson.titleZh,
+      vocabularyCount: lesson.vocabulary.filter((item) => item.definition.trim()).length,
+      sentenceCount: lesson.sentences.length,
+    }));
   }
 
   async publicLesson(lessonId: number): Promise<PublicLesson> {

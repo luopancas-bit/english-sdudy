@@ -897,6 +897,78 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .vocabulary-empty p,
 .vocabulary-state p { margin: 0; }
 
+.word-memory { display: grid; gap: 30px; }
+.word-memory-hero {
+  min-height: 190px;
+  padding: clamp(26px, 4vw, 46px);
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(280px, .7fr);
+  align-items: end;
+  gap: 36px;
+  color: #fff;
+  background:
+    radial-gradient(circle at 88% 18%, rgba(190, 151, 83, .35), transparent 32%),
+    linear-gradient(135deg, #173f36, #285e4f);
+}
+.word-memory-kicker { display: inline-flex; align-items: center; gap: 8px; color: #e5c98f; font-size: 12px; font-weight: 700; letter-spacing: .08em; }
+.word-memory-hero h2 { max-width: 720px; margin: 15px 0 10px; font: 600 clamp(28px, 4vw, 45px)/1.25 "Noto Serif SC", serif; }
+.word-memory-hero p { max-width: 700px; margin: 0; color: rgba(255,255,255,.72); line-height: 1.8; }
+.word-memory-facts { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+.word-memory-facts > span, .word-memory-facts > em {
+  min-height: 72px; padding: 14px; display: grid; place-content: center; text-align: center;
+  border: 1px solid rgba(255,255,255,.18); background: rgba(255,255,255,.07); font-style: normal;
+}
+.word-memory-facts strong { font: 600 24px "Noto Serif SC", serif; color: #e5c98f; }
+.word-memory-facts em { grid-column: 1 / -1; min-height: 42px; display: flex; align-items: center; justify-content: center; gap: 7px; color: #dfece7; font-size: 12px; }
+.word-memory-layout { display: grid; grid-template-columns: 270px minmax(0, 1fr); gap: 36px; align-items: start; }
+.chapter-picker { border: 1px solid var(--line); background: var(--surface); }
+.chapter-picker > header { padding: 22px 20px 16px; border-bottom: 1px solid var(--line); }
+.chapter-picker header small { color: var(--gold); font-size: 9px; font-weight: 700; letter-spacing: .17em; }
+.chapter-picker header h3 { margin: 5px 0 0; font: 600 21px "Noto Serif SC", serif; }
+.chapter-picker > div { max-height: 620px; overflow-y: auto; }
+.chapter-picker button {
+  width: 100%; min-height: 70px; padding: 12px 14px; border: 0; border-bottom: 1px solid var(--line);
+  display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; gap: 10px;
+  text-align: left; color: var(--ink); background: transparent; cursor: pointer;
+}
+.chapter-picker button:hover, .chapter-picker button.active { background: #edf4f0; }
+.chapter-picker button.active { box-shadow: inset 3px 0 var(--gold); }
+.chapter-picker button > span { font: 600 13px Georgia, serif; color: var(--gold); }
+.chapter-picker button div { min-width: 0; display: grid; gap: 4px; }
+.chapter-picker button strong, .chapter-picker button small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chapter-picker button small { color: var(--muted); }
+.word-memory-content { min-width: 0; }
+.word-memory-loading { min-height: 360px; display: grid; place-content: center; justify-items: center; gap: 12px; color: var(--muted); }
+.chapter-heading { display: flex; align-items: end; justify-content: space-between; gap: 24px; padding-bottom: 20px; border-bottom: 1px solid var(--line); }
+.chapter-heading small { color: var(--gold); font-weight: 700; }
+.chapter-heading h2 { margin: 6px 0 0; font: 600 clamp(26px, 3vw, 36px) "Noto Serif SC", serif; }
+.chapter-heading h2 i { margin-left: 8px; color: var(--muted); font: italic 18px Georgia, serif; }
+.chapter-heading .primary-button { min-height: 46px; padding: 0 18px; white-space: nowrap; }
+.training-scope { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin: 22px 0; }
+.training-scope button {
+  min-height: 86px; padding: 16px; border: 1px solid var(--line); display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px;
+  text-align: left; color: var(--muted); background: var(--surface); cursor: pointer;
+}
+.training-scope button.selected { color: var(--forest); border-color: var(--forest); background: #edf4f0; }
+.training-scope button span { display: grid; gap: 4px; color: var(--ink); }
+.training-scope button small { color: var(--muted); font-weight: 400; }
+.training-scope button i { padding: 4px 8px; border-radius: 99px; color: var(--muted); background: #eeeae0; font-size: 10px; font-style: normal; }
+.training-scope button.selected i { color: #fff; background: var(--forest); }
+.scope-note { margin: -10px 0 18px; color: #a84132; font-size: 12px; }
+.word-memory-list { display: grid; gap: 10px; }
+.word-memory-list article {
+  min-height: 84px; padding: 16px 18px; border: 1px solid var(--line); display: grid;
+  grid-template-columns: 46px minmax(0, 1fr) auto; align-items: center; gap: 16px; background: var(--surface);
+}
+.word-memory-list article > span { color: var(--gold); font-size: 11px; font-weight: 700; }
+.word-memory-list strong { font: 600 20px/1.45 "Noto Serif SC", serif; color: var(--forest); overflow-wrap: anywhere; }
+.word-memory-list p { margin: 4px 0 0; color: var(--muted); }
+.word-memory-list button {
+  min-height: 38px; padding: 0 12px; border: 1px solid var(--forest); border-radius: 7px;
+  display: inline-flex; align-items: center; gap: 6px; color: var(--forest); background: transparent; cursor: pointer;
+}
+
 .typing-session {
   min-height: min(680px, calc(100vh - 150px));
   border: 1px solid var(--line);
@@ -1048,7 +1120,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
     display: block; padding: 0; border-right: 0; border-top: 1px solid var(--line);
   }
   .brand, .profile-summary, .logout-button { display: none; }
-  .sidebar nav { height: 100%; grid-template-columns: repeat(5, 1fr); gap: 0; }
+  .sidebar nav { height: 100%; grid-template-columns: repeat(6, 1fr); gap: 0; }
   .sidebar nav button { min-height: 68px; border-left: 0; border-top: 3px solid transparent; flex-direction: column; gap: 4px; padding: 8px 2px 5px; font-size: 10px; }
   .sidebar nav button.active { color: var(--forest); background: transparent; border-top-color: var(--gold); }
   .sidebar nav span { display: block; }
@@ -1168,6 +1240,17 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   .vocabulary-filters { overflow-x: auto; }
   .vocabulary-card { grid-template-columns: 1fr; }
   .vocabulary-card button { width: 100%; justify-content: center; }
+  .word-memory-hero { min-height: 0; padding: 26px 20px; grid-template-columns: 1fr; gap: 24px; }
+  .word-memory-facts > span { min-height: 64px; }
+  .word-memory-layout { grid-template-columns: 1fr; gap: 24px; }
+  .chapter-picker > div { display: flex; max-height: none; overflow-x: auto; }
+  .chapter-picker button { min-width: 210px; border-bottom: 0; border-right: 1px solid var(--line); }
+  .chapter-picker button.active { box-shadow: inset 0 -3px var(--gold); }
+  .chapter-heading { align-items: stretch; flex-direction: column; }
+  .chapter-heading .primary-button { width: 100%; }
+  .training-scope { grid-template-columns: 1fr; }
+  .word-memory-list article { grid-template-columns: 40px minmax(0, 1fr); }
+  .word-memory-list button { grid-column: 2; width: 100%; justify-content: center; }
   .typing-session { min-height: calc(100vh - 118px); border-inline: 0; }
   .typing-header { min-height: 66px; padding: 0 16px; }
   .typing-header span { display: none; }

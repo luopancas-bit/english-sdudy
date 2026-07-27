@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { api } from "../../api";
 import { demoVocabulary } from "../../demo";
-import type { VocabularyData, VocabularyEntry, VocabularyInput } from "../../types";
+import type { TypingTrainingEntry, VocabularyData, VocabularyEntry, VocabularyInput } from "../../types";
 import { QwertyTraining } from "./QwertyTraining";
 
 type Filter = "all" | VocabularyEntry["status"];
@@ -20,7 +20,7 @@ export function VocabularyBook({ demo }: { demo: boolean }) {
   const [error, setError] = useState("");
   const [formError, setFormError] = useState("");
   const [saving, setSaving] = useState(false);
-  const [trainingEntries, setTrainingEntries] = useState<VocabularyEntry[] | null>(null);
+  const [trainingEntries, setTrainingEntries] = useState<TypingTrainingEntry[] | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query);
@@ -164,7 +164,7 @@ export function VocabularyBook({ demo }: { demo: boolean }) {
             <button
               className="vocabulary-train-all"
               disabled={!visibleEntries.length}
-              onClick={() => setTrainingEntries(visibleEntries.slice(0, trainingLimit))}
+              onClick={() => setTrainingEntries(visibleEntries.slice(0, trainingLimit).map(toTrainingEntry))}
             >
               <Keyboard size={17} />训练这一组
             </button>
@@ -182,7 +182,7 @@ export function VocabularyBook({ demo }: { demo: boolean }) {
                     <p className="meaning">{entry.meaning}</p>
                     {entry.example ? <blockquote>{entry.example}</blockquote> : null}
                   </div>
-                  <button onClick={() => setTrainingEntries([entry])}>
+                  <button onClick={() => setTrainingEntries([toTrainingEntry(entry)])}>
                     {entry.status === "learning" ? <Keyboard size={17} /> : <RotateCcw size={17} />}
                     {entry.status === "learning" ? "开始键入训练" : "继续巩固"}
                   </button>
@@ -225,3 +225,13 @@ const filterOptions: Array<[Filter, string]> = [
   ["learning", "学习中"],
   ["mastered", "已掌握"],
 ];
+
+function toTrainingEntry(entry: VocabularyEntry): TypingTrainingEntry {
+  return {
+    id: entry.id,
+    term: entry.term,
+    meaning: entry.meaning,
+    example: entry.example,
+    recordEntryId: entry.id,
+  };
+}

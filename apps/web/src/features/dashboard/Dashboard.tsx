@@ -9,6 +9,7 @@ import {
   LogOut,
   Map,
   NotebookTabs,
+  LibraryBig,
   Settings,
   Sparkles,
   Target,
@@ -21,11 +22,13 @@ import { ProfileSettings } from "../profile/ProfileSettings";
 import { ReviewCenter } from "../review/ReviewCenter";
 import { LearningReport } from "../report/LearningReport";
 import { VocabularyBook } from "../vocabulary/VocabularyBook";
+import { WordMemory } from "../vocabulary/WordMemory";
 
 const navItems = [
   ["today", "今日学习", Sparkles],
   ["map", "课程地图", Map],
   ["review", "错题与复习", ClipboardCheck],
+  ["word-memory", "单词记忆", LibraryBig],
   ["vocabulary", "生词本", NotebookTabs],
   ["report", "学习报告", BarChart3],
 ] as const;
@@ -100,7 +103,7 @@ export function Dashboard({
         <header className="topbar">
           <div>
             <h1>{active === "today" ? "下午好，今天先巩固，再向前一步" : active === "settings" ? "个人设置" : navItems.find(([id]) => id === active)?.[1]}</h1>
-            <p>{active === "today" ? "依据遗忘曲线与掌握情况，为你生成个性化学习计划。" : active === "settings" ? "管理你的昵称、学习目标和发音偏好。" : active === "map" ? "依次完成正式考核，解锁下一课；复习到期时优先巩固。" : active === "review" ? "按到期时间巩固记忆，并集中处理反复出错的内容。" : active === "vocabulary" ? "通过键入训练留下学习证据；只有正式考核达标，才能算真正掌握。" : "从学习频率、四维能力和逐课掌握度检查真实进步。"}</p>
+            <p>{active === "today" ? "依据遗忘曲线与掌握情况，为你生成个性化学习计划。" : active === "settings" ? "管理你的昵称、学习目标和发音偏好。" : active === "map" ? "依次完成正式考核，解锁下一课；复习到期时优先巩固。" : active === "review" ? "按到期时间巩固记忆，并集中处理反复出错的内容。" : active === "word-memory" ? "按词典章节优先学习单词，可选短句；统计只反馈，不限制学习进度。" : active === "vocabulary" ? "保存个人生词；“训练这一组”继续完成键入、纠错和记录闭环。" : "从学习频率、四维能力和逐课掌握度检查真实进步。"}</p>
           </div>
           <div className="top-actions"><button aria-label="提醒"><Bell size={20} /></button><button aria-label="设置" onClick={() => setActive("settings")}><Settings size={20} /></button></div>
         </header>
@@ -187,6 +190,8 @@ export function Dashboard({
           />
         ) : active === "vocabulary" ? (
           <VocabularyBook demo={demo} />
+        ) : active === "word-memory" ? (
+          <WordMemory demo={demo} />
         ) : active === "report" ? (
           <LearningReport demo={demo} />
         ) : (

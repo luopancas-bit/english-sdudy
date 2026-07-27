@@ -2,16 +2,18 @@ import { useMemo, useRef, useState } from "react";
 import { ArrowLeft, CheckCircle2, Keyboard, RotateCcw } from "lucide-react";
 import { evaluateTypingInput } from "@zhuguang/domain";
 import { api } from "../../api";
-import type { VocabularyEntry } from "../../types";
+import type { TypingTrainingEntry } from "../../types";
 
 export function QwertyTraining({
   entries,
   demo,
   onClose,
+  returnLabel = "返回生词本",
 }: {
-  entries: VocabularyEntry[];
+  entries: TypingTrainingEntry[];
   demo: boolean;
   onClose: () => void;
+  returnLabel?: string;
 }) {
   const [index, setIndex] = useState(0);
   const [input, setInput] = useState("");
@@ -34,7 +36,7 @@ export function QwertyTraining({
         <span>本组训练完成</span>
         <h1>正确输入已经留下证据</h1>
         <p>训练不会直接标记掌握。正式四维考核通过后，单词才会进入“已掌握”。</p>
-        <button className="primary-button" onClick={onClose}>返回生词本</button>
+        <button className="primary-button" onClick={onClose}>{returnLabel}</button>
       </section>
     );
   }
@@ -57,9 +59,9 @@ export function QwertyTraining({
     setSaving(true);
     setError("");
     try {
-      if (!demo) {
+      if (!demo && current!.recordEntryId) {
         await api.recordVocabularyTraining({
-          entryId: current!.id,
+          entryId: current!.recordEntryId,
           mode: "guided",
           firstTryCorrect,
           correctionCount,

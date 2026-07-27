@@ -40,6 +40,20 @@ describe("learning account flow", () => {
       path.join(contentDirectory, "assessments", "lesson-03.json"),
       JSON.stringify({ ...syntheticAssessment(), lessonId: 3, title: "第三合成课程" }),
     );
+    await fs.writeFile(
+      path.join(contentDirectory, "lessons.json"),
+      JSON.stringify([1, 2, 3].map((lessonId) => ({
+        id: lessonId,
+        slug: `lesson-${String(lessonId).padStart(2, "0")}`,
+        titleEn: `Synthetic ${lessonId}`,
+        titleZh: `合成课程${lessonId}`,
+        englishText: "A synthetic lesson.",
+        chineseText: "一节合成课程。",
+        audio: { us: null, uk: null },
+        vocabulary: [{ term: "synthetic", definition: "合成的" }],
+        sentences: [{ id: `${lessonId}-1`, text: "A synthetic lesson." }],
+      }))),
+    );
 
     const secret = "integration-test-secret-at-least-32-characters";
     const invitationCode = "SYNTHETIC-INVITE";
@@ -312,6 +326,20 @@ describe("learning account flow", () => {
         { lessonId: 1, title: "合成课程", unlocked: true, state: "mastered", score: 100 },
         { lessonId: 2, title: "第二合成课程", unlocked: true, state: "review-due", score: 0 },
         { lessonId: 3, title: "第三合成课程", unlocked: true, state: "ready", score: null },
+      ],
+    });
+
+    const wordMemoryChapters = await app.inject({
+      method: "GET",
+      url: "/api/word-memory/chapters",
+      headers: { cookie },
+    });
+    expect(wordMemoryChapters.statusCode).toBe(200);
+    expect(wordMemoryChapters.json()).toMatchObject({
+      chapters: [
+        { lessonId: 1, vocabularyCount: expect.any(Number), sentenceCount: expect.any(Number) },
+        { lessonId: 2, vocabularyCount: expect.any(Number), sentenceCount: expect.any(Number) },
+        { lessonId: 3, vocabularyCount: expect.any(Number), sentenceCount: expect.any(Number) },
       ],
     });
 

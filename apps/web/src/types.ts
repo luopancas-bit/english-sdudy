@@ -202,6 +202,22 @@ export interface VocabularyTrainingInput {
   device: "desktop" | "mobile";
 }
 
+export interface WordMemoryChapter {
+  lessonId: number;
+  titleEn: string;
+  titleZh: string;
+  vocabularyCount: number;
+  sentenceCount: number;
+}
+
+export interface TypingTrainingEntry {
+  id: string;
+  term: string;
+  meaning: string;
+  example: string | null;
+  recordEntryId?: string;
+}
+
 export interface LearningReportData {
   summary: {
     totalAttempts: number;
