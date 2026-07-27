@@ -424,6 +424,51 @@ describe("learning account flow", () => {
       occurredAt: expect.any(String),
     });
 
+    const sentenceTraining = await app.inject({
+      method: "POST",
+      url: "/api/word-memory/training-attempts",
+      headers: { cookie },
+      payload: {
+        lessonId: 1,
+        itemType: "sentence",
+        itemKey: "1-1",
+        mode: "guided",
+        firstTryCorrect: false,
+        correctionCount: 1,
+        durationMs: 3_000,
+        device: "mobile",
+      },
+    });
+    expect(sentenceTraining.statusCode).toBe(201);
+
+    const wordTraining = await app.inject({
+      method: "POST",
+      url: "/api/word-memory/training-attempts",
+      headers: { cookie },
+      payload: {
+        lessonId: 1,
+        itemType: "word",
+        itemKey: "synthetic",
+        mode: "guided",
+        firstTryCorrect: true,
+        correctionCount: 0,
+        durationMs: 1_800,
+        device: "desktop",
+      },
+    });
+    expect(wordTraining.statusCode).toBe(201);
+
+    const wordMemoryStats = await app.inject({
+      method: "GET",
+      url: "/api/word-memory/stats",
+      headers: { cookie },
+    });
+    expect(wordMemoryStats.statusCode).toBe(200);
+    expect(wordMemoryStats.json()).toMatchObject({
+      summary: { attempts: 2, practicedItems: 2, firstTryAccuracy: 50, corrections: 1 },
+      lessons: [{ lessonId: 1, attempts: 2, practicedItems: 2, firstTryAccuracy: 50, corrections: 1 }],
+    });
+
     await app.close();
   });
 });

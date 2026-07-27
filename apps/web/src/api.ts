@@ -1,4 +1,4 @@
-import type { AccountSession, Assessment, AttemptResult, CourseMapData, DashboardData, LearningReportData, LessonContent, RecordingReceipt, ReviewCenterData, User, VocabularyData, VocabularyEntry, VocabularyInput, VocabularyTrainingInput, WordMemoryChapter } from "./types";
+import type { AccountSession, Assessment, AttemptResult, CourseMapData, DashboardData, LearningReportData, LessonContent, RecordingReceipt, ReviewCenterData, User, VocabularyData, VocabularyEntry, VocabularyInput, VocabularyTrainingInput, WordMemoryChapter, WordMemoryStats } from "./types";
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, {
@@ -68,6 +68,16 @@ export const api = {
     }),
   wordMemoryChapters: () =>
     request<{ chapters: WordMemoryChapter[] }>("/api/word-memory/chapters"),
+  wordMemoryStats: () => request<WordMemoryStats>("/api/word-memory/stats"),
+  recordWordMemoryTraining: (input: Omit<VocabularyTrainingInput, "entryId"> & {
+    lessonId: number;
+    itemType: "word" | "sentence";
+    itemKey: string;
+  }) =>
+    request<{ attemptId: string; occurredAt: string }>("/api/word-memory/training-attempts", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
   reviewCenter: () => request<ReviewCenterData>("/api/review-center"),
   lesson: (lessonId: number) => request<LessonContent>(`/api/lessons/${lessonId}`),
   assessment: (lessonId: number) => request<Assessment>(`/api/lessons/${lessonId}/assessment`),

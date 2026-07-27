@@ -10,6 +10,7 @@ import {
   users,
   vocabularyEntries,
   vocabularyTrainingAttempts,
+  wordMemoryTrainingAttempts,
   wrongAnswers,
   type Database,
 } from "@zhuguang/database";
@@ -356,6 +357,76 @@ export class LearningRepository {
     };
     await this.database.insert(vocabularyTrainingAttempts).values(attempt);
     return attempt;
+  }
+
+  async saveWordMemoryTrainingAttempt(input: {
+    userId: string;
+    lessonId: number;
+    itemType: "word" | "sentence";
+    itemKey: string;
+    mode: "guided" | "dictation";
+    firstTryCorrect: boolean;
+    correctionCount: number;
+    durationMs: number;
+    device: "desktop" | "mobile";
+  }) {
+    const attempt = {
+      id: crypto.randomUUID(),
+      occurredAt: new Date().toISOString(),
+      ...input,
+    };
+    await this.database.insert(wordMemoryTrainingAttempts).values(attempt);
+    return attempt;
+  }
+
+  async wordMemoryStats(userId: string) {
+    const attempts = await this.database.query.wordMemoryTrainingAttempts.findMany({
+      where: eq(wordMemoryTrainingAttempts.userId, userId),
+      orderBy: [desc(wordMemoryTrainingAttempts.occurredAt)],
+    });
+    const byLesson = new Map<number, {
+      attempts: number;
+      firstTryCorrect: number;
+      corrections: number;
+      items: Set<string>;
+      lastPracticedAt: string;
+    }>();
+    let firstTryCorrect = 0;
+    let corrections = 0;
+    const practicedItems = new Set<string>();
+    for (const attempt of attempts) {
+      if (attempt.firstTryCorrect) firstTryCorrect += 1;
+      corrections += attempt.correctionCount;
+      practicedItems.add(`${attempt.lessonId}:${attempt.itemType}:${attempt.itemKey}`);
+      const lesson = byLesson.get(attempt.lessonId) ?? {
+        attempts: 0,
+        firstTryCorrect: 0,
+        corrections: 0,
+        items: new Set<string>(),
+        lastPracticedAt: attempt.occurredAt,
+      };
+      lesson.attempts += 1;
+      if (attempt.firstTryCorrect) lesson.firstTryCorrect += 1;
+      lesson.corrections += attempt.correctionCount;
+      lesson.items.add(`${attempt.itemType}:${attempt.itemKey}`);
+      byLesson.set(attempt.lessonId, lesson);
+    }
+    return {
+      summary: {
+        attempts: attempts.length,
+        practicedItems: practicedItems.size,
+        firstTryAccuracy: attempts.length ? Math.round((firstTryCorrect / attempts.length) * 100) : 0,
+        corrections,
+      },
+      lessons: Array.from(byLesson, ([lessonId, value]) => ({
+        lessonId,
+        attempts: value.attempts,
+        practicedItems: value.items.size,
+        firstTryAccuracy: Math.round((value.firstTryCorrect / value.attempts) * 100),
+        corrections: value.corrections,
+        lastPracticedAt: value.lastPracticedAt,
+      })),
+    };
   }
 
   async dashboard(userId: string, now: string) {

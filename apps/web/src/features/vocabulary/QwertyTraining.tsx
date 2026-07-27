@@ -60,8 +60,22 @@ export function QwertyTraining({
     setError("");
     try {
       if (!demo && current!.recordEntryId) {
-        await api.recordVocabularyTraining({
-          entryId: current!.recordEntryId,
+        const evidence = {
+          mode: "guided" as const,
+          firstTryCorrect,
+          correctionCount,
+          durationMs: Math.max(100, Date.now() - startedAt.current),
+          device: window.matchMedia("(max-width: 700px)").matches ? "mobile" as const : "desktop" as const,
+        };
+        await Promise.all([
+          api.recordVocabularyTraining({ entryId: current!.recordEntryId, ...evidence }),
+          ...(current!.wordMemory
+            ? [api.recordWordMemoryTraining({ ...current!.wordMemory, ...evidence })]
+            : []),
+        ]);
+      } else if (!demo && current!.wordMemory) {
+        await api.recordWordMemoryTraining({
+          ...current!.wordMemory,
           mode: "guided",
           firstTryCorrect,
           correctionCount,

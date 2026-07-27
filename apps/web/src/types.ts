@@ -216,6 +216,28 @@ export interface TypingTrainingEntry {
   meaning: string;
   example: string | null;
   recordEntryId?: string;
+  wordMemory?: {
+    lessonId: number;
+    itemType: "word" | "sentence";
+    itemKey: string;
+  };
+}
+
+export interface WordMemoryStats {
+  summary: {
+    attempts: number;
+    practicedItems: number;
+    firstTryAccuracy: number;
+    corrections: number;
+  };
+  lessons: Array<{
+    lessonId: number;
+    attempts: number;
+    practicedItems: number;
+    firstTryAccuracy: number;
+    corrections: number;
+    lastPracticedAt: string;
+  }>;
 }
 
 export interface LearningReportData {

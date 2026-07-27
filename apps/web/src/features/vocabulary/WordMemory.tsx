@@ -16,6 +16,7 @@ import type {
   TypingTrainingEntry,
   VocabularyEntry,
   WordMemoryChapter,
+  WordMemoryStats,
 } from "../../types";
 import { QwertyTraining } from "./QwertyTraining";
 
@@ -32,17 +33,25 @@ export function WordMemory({ demo }: { demo: boolean }) {
   const [includeWords, setIncludeWords] = useState(true);
   const [includeSentences, setIncludeSentences] = useState(false);
   const [training, setTraining] = useState<TypingTrainingEntry[] | null>(null);
+  const [stats, setStats] = useState<WordMemoryStats | null>(null);
   const [preparing, setPreparing] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
-    const load = demo
+    const chaptersPromise = demo
       ? Promise.resolve({ chapters: demoChapters })
       : api.wordMemoryChapters();
-    load.then(({ chapters: loaded }) => {
+    const statsPromise = demo
+      ? Promise.resolve<WordMemoryStats>({
+          summary: { attempts: 12, practicedItems: 7, firstTryAccuracy: 75, corrections: 4 },
+          lessons: [{ lessonId: 8, attempts: 12, practicedItems: 7, firstTryAccuracy: 75, corrections: 4, lastPracticedAt: new Date().toISOString() }],
+        })
+      : api.wordMemoryStats();
+    Promise.all([chaptersPromise, statsPromise]).then(([{ chapters: loaded }, loadedStats]) => {
       if (cancelled) return;
       setChapters(loaded);
+      setStats(loadedStats);
       setSelectedId((current) => current ?? loaded[0]?.lessonId ?? null);
     }).catch((caught) => {
       if (!cancelled) setError(caught instanceof Error ? caught.message : "词典章节加载失败");
@@ -65,6 +74,7 @@ export function WordMemory({ demo }: { demo: boolean }) {
   }, [demo, selectedId]);
 
   const selectedChapter = chapters.find((chapter) => chapter.lessonId === selectedId);
+  const selectedStats = stats?.lessons.find((item) => item.lessonId === selectedId);
   const selectedCount = (includeWords ? lesson?.vocabulary.length ?? 0 : 0)
     + (includeSentences ? lesson?.sentences.length ?? 0 : 0);
   const preview = useMemo(() => {
@@ -119,12 +129,14 @@ export function WordMemory({ demo }: { demo: boolean }) {
           meaning: word.meaning,
           example: word.example,
           recordEntryId: word.id,
+          wordMemory: { lessonId: lesson.id, itemType: "word" as const, itemKey: word.term },
         })),
         ...sentences.map((sentence) => ({
           id: `sentence-${lesson.id}-${sentence.id}`,
           term: sentence.text,
           meaning: `第 ${String(lesson.id).padStart(2, "0")} 章短句`,
           example: null,
+          wordMemory: { lessonId: lesson.id, itemType: "sentence" as const, itemKey: sentence.id },
         })),
       ]);
     } catch (caught) {
@@ -139,7 +151,10 @@ export function WordMemory({ demo }: { demo: boolean }) {
       <QwertyTraining
         entries={training}
         demo={demo}
-        onClose={() => setTraining(null)}
+        onClose={() => {
+          setTraining(null);
+          if (!demo) void api.wordMemoryStats().then(setStats);
+        }}
         returnLabel="返回单词记忆"
       />
     );
@@ -158,8 +173,8 @@ export function WordMemory({ demo }: { demo: boolean }) {
           <p>所有章节都可直接进入。训练结果只用于统计和复习反馈，不锁章节，也不阻止继续学习。</p>
         </div>
         <div className="word-memory-facts">
-          <span><strong>{chapters.length}</strong> 个词典章节</span>
-          <span><strong>{selectedCount}</strong> 项本次训练</span>
+          <span><strong>{stats?.summary.practicedItems ?? 0}</strong> 项练习过</span>
+          <span><strong>{stats?.summary.firstTryAccuracy ?? 0}%</strong> 首次正确</span>
           <em><Check size={15} />无达标门槛</em>
         </div>
       </div>
@@ -201,6 +216,13 @@ export function WordMemory({ demo }: { demo: boolean }) {
                 <button className={includeSentences ? "selected" : ""} onClick={() => setIncludeSentences((value) => !value)}>
                   <MessageSquareText size={22} /><span><strong>课文短句</strong><small>{lesson.sentences.length} 句，作为可选强化</small></span><i>{includeSentences ? "已选择" : "可选"}</i>
                 </button>
+              </div>
+              <div className="chapter-training-stats" aria-label="本章训练统计">
+                <span><small>累计训练</small><strong>{selectedStats?.attempts ?? 0} 次</strong></span>
+                <span><small>练习内容</small><strong>{selectedStats?.practicedItems ?? 0} 项</strong></span>
+                <span><small>首次正确率</small><strong>{selectedStats?.firstTryAccuracy ?? 0}%</strong></span>
+                <span><small>累计纠错</small><strong>{selectedStats?.corrections ?? 0} 次</strong></span>
+                <p>这些数字只帮助你判断复习重点，不影响任何章节的进入和学习。</p>
               </div>
               {!selectedCount ? <p className="scope-note">请选择单词、短句，或同时选择两种训练内容。</p> : null}
               {error ? <p className="vocabulary-form-error" role="alert">{error}</p> : null}

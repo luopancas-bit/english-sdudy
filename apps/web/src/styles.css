@@ -956,6 +956,26 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .training-scope button i { padding: 4px 8px; border-radius: 99px; color: var(--muted); background: #eeeae0; font-size: 10px; font-style: normal; }
 .training-scope button.selected i { color: #fff; background: var(--forest); }
 .scope-note { margin: -10px 0 18px; color: #a84132; font-size: 12px; }
+.chapter-training-stats {
+  margin: -8px 0 22px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  background: #f8f6ef;
+}
+.chapter-training-stats span { display: grid; gap: 4px; }
+.chapter-training-stats small { color: var(--muted); }
+.chapter-training-stats strong { font: 600 18px "Noto Serif SC", serif; color: var(--forest); }
+.chapter-training-stats p {
+  grid-column: 1 / -1;
+  margin: 2px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+}
 .word-memory-list { display: grid; gap: 10px; }
 .word-memory-list article {
   min-height: 84px; padding: 16px 18px; border: 1px solid var(--line); display: grid;
@@ -1253,6 +1273,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   .chapter-heading { align-items: stretch; flex-direction: column; }
   .chapter-heading .primary-button { width: 100%; }
   .training-scope { grid-template-columns: 1fr; }
+  .chapter-training-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .word-memory-list article { grid-template-columns: 40px minmax(0, 1fr); }
   .word-memory-list button { grid-column: 2; width: 100%; justify-content: center; }
   .typing-session { min-height: calc(100vh - 118px); border-inline: 0; }

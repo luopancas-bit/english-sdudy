@@ -78,6 +78,12 @@ const vocabularyTrainingSchema = z.object({
   device: z.enum(["desktop", "mobile"]),
 });
 
+const wordMemoryTrainingSchema = vocabularyTrainingSchema.omit({ entryId: true }).extend({
+  lessonId: z.number().int().min(1).max(40),
+  itemType: z.enum(["word", "sentence"]),
+  itemKey: z.string().trim().min(1).max(500),
+});
+
 const COURSE_MAP_LESSON_COUNT = 3;
 
 export async function createApp(
@@ -555,6 +561,25 @@ export async function createApp(
     const user = await requireUser(request, reply);
     if (!user) return;
     return { chapters: await content.wordMemoryChapters() };
+  });
+
+  app.get("/api/word-memory/stats", async (request, reply) => {
+    const user = await requireUser(request, reply);
+    if (!user) return;
+    return repository.wordMemoryStats(user.id);
+  });
+
+  app.post("/api/word-memory/training-attempts", async (request, reply) => {
+    const user = await requireUser(request, reply);
+    if (!user) return;
+    const body = wordMemoryTrainingSchema.parse(request.body);
+    const lesson = await content.loadLesson(body.lessonId);
+    const validItem = body.itemType === "word"
+      ? lesson.vocabulary.some((item) => normalizeVocabularyTerm(item.term) === normalizeVocabularyTerm(body.itemKey))
+      : lesson.sentences.some((item) => item.id === body.itemKey);
+    if (!validItem) return reply.code(404).send({ error: "本章训练内容不存在" });
+    const attempt = await repository.saveWordMemoryTrainingAttempt({ userId: user.id, ...body });
+    return reply.code(201).send({ attemptId: attempt.id, occurredAt: attempt.occurredAt });
   });
 
   app.get("/api/lessons/:lessonId/assessment", async (request, reply) => {
