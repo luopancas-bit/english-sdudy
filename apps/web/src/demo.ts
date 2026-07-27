@@ -1,4 +1,4 @@
-import type { Assessment, CourseMapData, DashboardData, ReviewCenterData, VocabularyData } from "./types";
+import type { Assessment, CourseMapData, DashboardData, LessonContent, ReviewCenterData, VocabularyData } from "./types";
 
 export const demoDashboard: DashboardData = {
   learner: {
@@ -42,6 +42,26 @@ export const demoAssessment: Assessment = {
       prompt: "用一句话概括本段的核心观点。",
       points: 1,
     },
+  ],
+};
+
+export const demoLesson: LessonContent = {
+  id: 8,
+  slug: "lesson-08",
+  titleEn: "Computer",
+  titleZh: "电脑",
+  englishText: "A computer helps me organize my work. I use it to write documents, check email, and learn new things. It is useful, but I also remember to rest my eyes.",
+  chineseText: "电脑帮助我整理工作。我用它撰写文档、查看邮件和学习新知识。它很有用，但我也会记得让眼睛休息。",
+  audio: { us: null, uk: null },
+  vocabulary: [
+    { term: "organize", definition: "组织；整理" },
+    { term: "document", definition: "文件；文档" },
+    { term: "useful", definition: "有用的" },
+  ],
+  sentences: [
+    { id: "08-01", text: "A computer helps me organize my work.", cloze: "organize" },
+    { id: "08-02", text: "I use it to write documents, check email, and learn new things.", cloze: "document" },
+    { id: "08-03", text: "It is useful, but I also remember to rest my eyes.", cloze: "useful" },
   ],
 };
 

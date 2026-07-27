@@ -44,6 +44,29 @@ export interface Assessment {
   }>;
 }
 
+export interface LessonContent {
+  id: number;
+  slug: string;
+  titleEn: string;
+  titleZh: string;
+  englishText: string;
+  chineseText: string;
+  audio: {
+    us: string | null;
+    uk: string | null;
+  };
+  vocabulary: Array<{
+    term: string;
+    definition: string;
+    sourcePage?: number;
+  }>;
+  sentences: Array<{
+    id: string;
+    text: string;
+    cloze?: string;
+  }>;
+}
+
 export interface AttemptResult {
   attemptId: string;
   countsTowardMastery: boolean;

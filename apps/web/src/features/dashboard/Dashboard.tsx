@@ -16,6 +16,7 @@ import {
 import type { DashboardData } from "../../types";
 import { CourseMap } from "../map/CourseMap";
 import { AssessmentView } from "../lesson/AssessmentView";
+import { LessonStudyView } from "../lesson/LessonStudyView";
 import { ProfileSettings } from "../profile/ProfileSettings";
 import { ReviewCenter } from "../review/ReviewCenter";
 import { VocabularyBook } from "../vocabulary/VocabularyBook";
@@ -45,6 +46,7 @@ export function Dashboard({
     lessonId: number;
     kind: "formal" | "review";
   } | null>(null);
+  const [studyLessonId, setStudyLessonId] = useState<number | null>(null);
 
   if (assessmentSession) {
     return (
@@ -55,6 +57,21 @@ export function Dashboard({
         onClose={() => {
           setAssessmentSession(null);
           void onRefresh();
+        }}
+      />
+    );
+  }
+
+  if (studyLessonId !== null) {
+    return (
+      <LessonStudyView
+        lessonId={studyLessonId}
+        learner={data.learner}
+        demo={demo}
+        onClose={() => setStudyLessonId(null)}
+        onStartAssessment={() => {
+          setAssessmentSession({ lessonId: studyLessonId, kind: "formal" });
+          setStudyLessonId(null);
         }}
       />
     );
@@ -97,7 +114,7 @@ export function Dashboard({
         ) : active === "today" ? (
           <div className="dashboard-grid">
             <section className="today-column">
-              <button className="current-lesson" onClick={() => setAssessmentSession({ lessonId: data.currentLesson, kind: "formal" })}>
+              <button className="current-lesson" onClick={() => setStudyLessonId(data.currentLesson)}>
                 <BookOpen size={34} strokeWidth={1.6} />
                 <span><small>当前学习</small><strong>第 {String(data.currentLesson).padStart(2, "0")} 课　{data.currentLessonTitle}</strong></span>
                 <ChevronRight />
@@ -112,7 +129,7 @@ export function Dashboard({
                 <PlanStop icon={<Clock3 />} title="到期复习" duration="12 分钟" note="巩固记忆，夯实基础" x="7%" y="61%" />
                 <PlanStop icon={<Target />} title="薄弱项" duration="6 分钟" note="攻克弱点，提升能力" x="39%" y="42%" tone="gold" />
                 <PlanStop icon={<BookOpen />} title="新课学习" duration="10 分钟" note="学习新知，向前一步" x="68%" y="21%" />
-                <button className="start-orb" onClick={() => setAssessmentSession({ lessonId: data.currentLesson, kind: "formal" })}>
+                <button className="start-orb" onClick={() => setStudyLessonId(data.currentLesson)}>
                   <img src="/brand-mark.svg" alt="" /><span>开始今日学习</span><small>预计用时 28 分钟</small>
                 </button>
               </div>
@@ -153,7 +170,10 @@ export function Dashboard({
         ) : active === "map" ? (
           <CourseMap
             demo={demo}
-            onStartAssessment={(lessonId, kind) => setAssessmentSession({ lessonId, kind })}
+            onStartAssessment={(lessonId, kind) => {
+              if (kind === "review") setAssessmentSession({ lessonId, kind });
+              else setStudyLessonId(lessonId);
+            }}
           />
         ) : active === "vocabulary" ? (
           <VocabularyBook demo={demo} />

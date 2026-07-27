@@ -388,6 +388,26 @@ export async function createApp(
     return content.publicAssessment(lessonId);
   });
 
+  app.get("/api/lessons/:lessonId", async (request, reply) => {
+    const user = await requireUser(request, reply);
+    if (!user) return;
+    const lessonId = z.coerce.number().int().min(1).max(COURSE_MAP_LESSON_COUNT)
+      .parse((request.params as { lessonId: string }).lessonId);
+    return content.publicLesson(lessonId);
+  });
+
+  app.get("/api/lessons/:lessonId/audio/:accent", async (request, reply) => {
+    const user = await requireUser(request, reply);
+    if (!user) return;
+    const params = z.object({
+      lessonId: z.coerce.number().int().min(1).max(COURSE_MAP_LESSON_COUNT),
+      accent: z.enum(["us", "uk"]),
+    }).parse(request.params);
+    const audio = await content.lessonAudio(params.lessonId, params.accent);
+    if (!audio) return reply.code(404).send({ error: "本课音频资源尚未部署" });
+    return reply.type("audio/mpeg").header("Cache-Control", "private, max-age=86400").send(audio);
+  });
+
   app.post("/api/lessons/:lessonId/attempts", async (request, reply) => {
     const user = await requireUser(request, reply);
     if (!user) return;
