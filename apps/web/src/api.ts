@@ -1,4 +1,4 @@
-import type { Assessment, AttemptResult, CourseMapData, DashboardData, LearningReportData, LessonContent, RecordingReceipt, ReviewCenterData, User, VocabularyData, VocabularyEntry, VocabularyInput } from "./types";
+import type { AccountSession, Assessment, AttemptResult, CourseMapData, DashboardData, LearningReportData, LessonContent, RecordingReceipt, ReviewCenterData, User, VocabularyData, VocabularyEntry, VocabularyInput } from "./types";
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, {
@@ -36,6 +36,16 @@ export const api = {
     request<User>("/api/me", {
       method: "PATCH",
       body: JSON.stringify(input),
+    }),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<{ ok: true; otherSessionsRevoked: true }>("/api/me/password", {
+      method: "POST",
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }),
+  sessions: () => request<{ sessions: AccountSession[] }>("/api/me/sessions"),
+  removeSession: (sessionId: string) =>
+    request<{ ok: true; removedCurrent: boolean }>(`/api/me/sessions/${sessionId}`, {
+      method: "DELETE",
     }),
   dashboard: () => request<DashboardData>("/api/dashboard"),
   courseMap: () => request<CourseMapData>("/api/course-map"),

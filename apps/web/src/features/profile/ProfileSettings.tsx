@@ -1,7 +1,7 @@
-import { useState, type FormEvent } from "react";
-import { ArrowLeft, Save } from "lucide-react";
+import { useEffect, useState, type FormEvent } from "react";
+import { ArrowLeft, Check, KeyRound, Laptop, Save, ShieldCheck, Smartphone, Trash2 } from "lucide-react";
 import { api } from "../../api";
-import type { User } from "../../types";
+import type { AccountSession, User } from "../../types";
 
 export function ProfileSettings({
   user,
@@ -47,7 +47,7 @@ export function ProfileSettings({
         <span className="avatar large">{user.nickname.slice(0, 1)}</span>
         <div><h2>个人资料与学习偏好</h2><p>这些设置会在电脑和 iPhone 间同步。</p></div>
       </div>
-      <form onSubmit={submit}>
+      <form className="profile-form" onSubmit={submit}>
         <label>账号<input value={user.username} disabled /></label>
         <label>昵称<input name="nickname" defaultValue={user.nickname} maxLength={24} required /></label>
         <label>
@@ -67,6 +67,143 @@ export function ProfileSettings({
           {message && <span role="status">{message}</span>}
         </div>
       </form>
+      <SecuritySettings demo={demo} />
     </section>
   );
 }
+
+function SecuritySettings({ demo }: { demo: boolean }) {
+  const [sessions, setSessions] = useState<AccountSession[]>(demo ? demoSessions : []);
+  const [loading, setLoading] = useState(!demo);
+  const [busySession, setBusySession] = useState<string | null>(null);
+  const [passwordBusy, setPasswordBusy] = useState(false);
+  const [passwordMessage, setPasswordMessage] = useState("");
+
+  useEffect(() => {
+    if (demo) return;
+    let active = true;
+    api.sessions()
+      .then((result) => {
+        if (active) setSessions(result.sessions);
+      })
+      .catch(() => {
+        if (active) setPasswordMessage("登录设备加载失败，请稍后重试");
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [demo]);
+
+  async function changePassword(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const currentPassword = String(data.get("currentPassword"));
+    const newPassword = String(data.get("newPassword"));
+    const confirmPassword = String(data.get("confirmPassword"));
+    setPasswordMessage("");
+    if (newPassword !== confirmPassword) {
+      setPasswordMessage("两次输入的新密码不一致");
+      return;
+    }
+    setPasswordBusy(true);
+    try {
+      if (!demo) {
+        await api.changePassword(currentPassword, newPassword);
+        const refreshed = await api.sessions();
+        setSessions(refreshed.sessions);
+        form.reset();
+      }
+      setPasswordMessage(demo ? "预览模式不会修改密码" : "密码已更新，其他设备已经退出登录");
+    } catch (reason) {
+      setPasswordMessage(reason instanceof Error ? reason.message : "密码修改失败");
+    } finally {
+      setPasswordBusy(false);
+    }
+  }
+
+  async function removeSession(sessionId: string) {
+    setBusySession(sessionId);
+    setPasswordMessage("");
+    try {
+      if (!demo) await api.removeSession(sessionId);
+      setSessions((current) => current.filter((session) => session.id !== sessionId));
+    } catch (reason) {
+      setPasswordMessage(reason instanceof Error ? reason.message : "设备退出失败");
+    } finally {
+      setBusySession(null);
+    }
+  }
+
+  return (
+    <section className="account-security">
+      <div className="security-heading"><ShieldCheck size={24} /><div><h2>账号安全</h2><p>修改密码或检查哪些电脑和手机仍保持登录。</p></div></div>
+
+      <form className="password-form" onSubmit={changePassword}>
+        <h3><KeyRound size={18} />修改密码</h3>
+        <label>当前密码<input name="currentPassword" type="password" autoComplete="current-password" required /></label>
+        <label>新密码<input name="newPassword" type="password" autoComplete="new-password" minLength={12} maxLength={128} required /></label>
+        <label>确认新密码<input name="confirmPassword" type="password" autoComplete="new-password" minLength={12} maxLength={128} required /></label>
+        <button className="primary-button" disabled={passwordBusy}>{passwordBusy ? "正在修改…" : "修改密码并退出其他设备"}</button>
+      </form>
+
+      <div className="session-list">
+        <div><h3>已登录设备</h3><span>{loading ? "正在读取…" : `${sessions.length} 个会话`}</span></div>
+        {sessions.map((session) => {
+          const device = describeDevice(session.userAgent);
+          const Icon = device.mobile ? Smartphone : Laptop;
+          return (
+            <article key={session.id}>
+              <span><Icon size={20} /></span>
+              <div><strong>{device.label}</strong><small>登录于 {formatSessionTime(session.createdAt)} · 有效至 {formatSessionTime(session.expiresAt)}</small></div>
+              {session.current
+                ? <em><Check size={14} />当前设备</em>
+                : <button disabled={busySession === session.id} onClick={() => void removeSession(session.id)}><Trash2 size={16} />{busySession === session.id ? "正在退出" : "退出设备"}</button>}
+            </article>
+          );
+        })}
+        {!loading && !sessions.length && <p>没有可显示的登录设备。</p>}
+      </div>
+      {passwordMessage && <p className="security-message" role="status">{passwordMessage}</p>}
+    </section>
+  );
+}
+
+function describeDevice(userAgent: string | null) {
+  if (!userAgent) return { label: "未知设备", mobile: false };
+  const mobile = /iPhone|iPad|Android/i.test(userAgent);
+  const browser = /Edg\//.test(userAgent) ? "Edge" : /Chrome\//.test(userAgent) ? "Chrome" : /Safari\//.test(userAgent) ? "Safari" : "浏览器";
+  const system = /iPhone/.test(userAgent) ? "iPhone" : /iPad/.test(userAgent) ? "iPad" : /Android/.test(userAgent) ? "Android" : /Macintosh/.test(userAgent) ? "Mac" : /Windows/.test(userAgent) ? "Windows" : "电脑";
+  return { label: `${system} · ${browser}`, mobile };
+}
+
+function formatSessionTime(value: string) {
+  return new Intl.DateTimeFormat("zh-CN", {
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
+
+const demoSessions: AccountSession[] = [
+  {
+    id: "demo-current",
+    current: true,
+    userAgent: "Mozilla/5.0 (Macintosh) AppleWebKit/605.1.15 Safari/605.1.15",
+    createdAt: "2026-07-27T08:00:00+08:00",
+    lastSeenAt: "2026-07-27T11:00:00+08:00",
+    expiresAt: "2026-08-26T08:00:00+08:00",
+  },
+  {
+    id: "demo-phone",
+    current: false,
+    userAgent: "Mozilla/5.0 (iPhone) AppleWebKit/605.1.15 Safari/604.1",
+    createdAt: "2026-07-26T19:30:00+08:00",
+    lastSeenAt: "2026-07-27T09:20:00+08:00",
+    expiresAt: "2026-08-25T19:30:00+08:00",
+  },
+];

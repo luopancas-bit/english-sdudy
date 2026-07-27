@@ -59,6 +59,13 @@ export class LearningRepository {
     return this.findUserById(userId);
   }
 
+  async updatePassword(userId: string, passwordHash: string) {
+    await this.database
+      .update(users)
+      .set({ passwordHash, updatedAt: new Date().toISOString() })
+      .where(eq(users.id, userId));
+  }
+
   async createInvitation(input: { codeHash: string; createdBy: string | null; expiresAt: string }) {
     await this.database.insert(invitations).values({
       id: crypto.randomUUID(),
@@ -107,6 +114,26 @@ export class LearningRepository {
 
   async deleteSession(tokenHash: string) {
     await this.database.delete(sessions).where(eq(sessions.tokenHash, tokenHash));
+  }
+
+  listSessions(userId: string) {
+    return this.database.query.sessions.findMany({
+      where: eq(sessions.userId, userId),
+      orderBy: [desc(sessions.lastSeenAt)],
+    });
+  }
+
+  async deleteSessionForUser(userId: string, sessionId: string) {
+    await this.database.delete(sessions).where(and(eq(sessions.id, sessionId), eq(sessions.userId, userId)));
+  }
+
+  async deleteOtherSessions(userId: string, currentTokenHash: string) {
+    const rows = await this.listSessions(userId);
+    await Promise.all(
+      rows
+        .filter((session) => session.tokenHash !== currentTokenHash)
+        .map((session) => this.deleteSessionForUser(userId, session.id)),
+    );
   }
 
   async saveAttempt(input: typeof attempts.$inferInsert) {

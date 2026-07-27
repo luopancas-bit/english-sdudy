@@ -8,6 +8,15 @@ export interface User {
   reminderTime: string | null;
 }
 
+export interface AccountSession {
+  id: string;
+  current: boolean;
+  userAgent: string | null;
+  createdAt: string;
+  lastSeenAt: string;
+  expiresAt: string;
+}
+
 export interface DashboardData {
   learner: User;
   longTermMastery: number;

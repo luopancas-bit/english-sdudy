@@ -36,6 +36,18 @@ const profileSchema = z.object({
   reminderTime: z.string().regex(/^\d{2}:\d{2}$/).nullable().optional(),
 });
 
+const passwordChangeSchema = z.object({
+  currentPassword: z.string().min(1).max(128),
+  newPassword: z.string().min(12).max(128),
+}).refine((value) => value.currentPassword !== value.newPassword, {
+  message: "新密码不能与当前密码相同",
+  path: ["newPassword"],
+});
+
+const sessionParamsSchema = z.object({
+  sessionId: z.string().uuid(),
+});
+
 const submissionSchema = z.object({
   kind: z.enum(["formal", "practice", "review"]),
   answers: z.record(z.string(), z.string()),
@@ -211,6 +223,51 @@ export async function createApp(
     if (!user) return;
     const updated = await repository.updateProfile(user.id, profileSchema.parse(request.body));
     return updated ? publicUser(updated) : reply.code(404).send({ error: "账号不存在" });
+  });
+
+  app.post("/api/me/password", async (request, reply) => {
+    const user = await requireUser(request, reply);
+    if (!user) return;
+    const body = passwordChangeSchema.parse(request.body);
+    if (!(await verifyPassword(body.currentPassword, user.passwordHash))) {
+      return reply.code(400).send({ error: "当前密码不正确" });
+    }
+    await repository.updatePassword(user.id, await hashPassword(body.newPassword));
+    const token = request.cookies[config.SESSION_COOKIE_NAME];
+    if (token) await repository.deleteOtherSessions(user.id, hashToken(token, config.SESSION_SECRET));
+    return { ok: true, otherSessionsRevoked: true };
+  });
+
+  app.get("/api/me/sessions", async (request, reply) => {
+    const user = await requireUser(request, reply);
+    if (!user) return;
+    const token = request.cookies[config.SESSION_COOKIE_NAME];
+    const currentTokenHash = token ? hashToken(token, config.SESSION_SECRET) : null;
+    const sessionRows = await repository.listSessions(user.id);
+    return {
+      sessions: sessionRows.map((session) => ({
+        id: session.id,
+        current: session.tokenHash === currentTokenHash,
+        userAgent: session.userAgent,
+        createdAt: session.createdAt,
+        lastSeenAt: session.lastSeenAt,
+        expiresAt: session.expiresAt,
+      })),
+    };
+  });
+
+  app.delete("/api/me/sessions/:sessionId", async (request, reply) => {
+    const user = await requireUser(request, reply);
+    if (!user) return;
+    const { sessionId } = sessionParamsSchema.parse(request.params);
+    const rows = await repository.listSessions(user.id);
+    const target = rows.find((session) => session.id === sessionId);
+    if (!target) return reply.code(404).send({ error: "登录设备不存在" });
+    await repository.deleteSessionForUser(user.id, sessionId);
+    const token = request.cookies[config.SESSION_COOKIE_NAME];
+    const removedCurrent = Boolean(token && target.tokenHash === hashToken(token, config.SESSION_SECRET));
+    if (removedCurrent) reply.clearCookie(config.SESSION_COOKIE_NAME, { path: "/" });
+    return { ok: true, removedCurrent };
   });
 
   app.get("/api/dashboard", async (request, reply) => {

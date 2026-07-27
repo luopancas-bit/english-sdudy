@@ -464,13 +464,36 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .avatar.large { width: 66px; height: 66px; font-size: 28px; flex: 0 0 auto; }
 .profile-heading h2 { margin: 0 0 8px; font: 600 29px "Noto Serif SC", serif; }
 .profile-heading p { margin: 0; color: var(--muted); }
-.profile-settings form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 28px; }
+.profile-settings > .profile-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 28px; }
 .profile-settings label { display: grid; gap: 9px; font-weight: 600; }
 .profile-settings input, .profile-settings select { width: 100%; padding: 0 14px; color: var(--ink); background: #fff; }
 .profile-settings input:disabled { color: var(--muted); background: #f2eee4; }
 .profile-actions { grid-column: 1 / -1; display: flex; align-items: center; gap: 20px; margin-top: 14px; }
 .profile-actions .primary-button { padding: 0 24px; }
 .profile-actions span { color: var(--muted); font-size: 13px; }
+.account-security { margin-top: 52px; padding-top: 34px; border-top: 1px solid var(--line); }
+.security-heading { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 26px; }
+.security-heading > svg { color: var(--gold); margin-top: 3px; }
+.security-heading h2 { margin: 0 0 6px; font: 600 24px "Noto Serif SC", serif; }
+.security-heading p { margin: 0; color: var(--muted); line-height: 1.6; }
+.password-form { padding: 24px; border: 1px solid var(--line); background: var(--surface); display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+.password-form h3 { grid-column: 1 / -1; margin: 0; display: flex; align-items: center; gap: 9px; font: 600 18px "Noto Serif SC", serif; }
+.password-form label { font-size: 13px; }
+.password-form input { height: 46px; }
+.password-form .primary-button { grid-column: 1 / -1; justify-self: start; min-height: 46px; padding: 0 20px; }
+.session-list { margin-top: 30px; }
+.session-list > div:first-child { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.session-list h3 { margin: 0; font: 600 18px "Noto Serif SC", serif; }
+.session-list > div:first-child span { color: var(--muted); font-size: 13px; }
+.session-list article { min-height: 74px; display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; align-items: center; gap: 14px; border-top: 1px solid var(--line); }
+.session-list article > span { width: 38px; height: 38px; display: grid; place-items: center; color: var(--forest); background: #e8f0eb; border-radius: 50%; }
+.session-list article > div { display: grid; gap: 5px; }
+.session-list article small { color: var(--muted); }
+.session-list article em { display: inline-flex; align-items: center; gap: 5px; color: var(--forest); font-style: normal; font-size: 12px; }
+.session-list article button { min-height: 36px; padding: 0 12px; border: 1px solid var(--line); display: inline-flex; align-items: center; gap: 6px; background: #fff; cursor: pointer; }
+.session-list article button:disabled { opacity: .55; }
+.session-list > p, .security-message { color: var(--muted); font-size: 13px; }
+.security-message { padding: 12px 14px; background: var(--gold-soft); }
 
 .review-center { display: grid; gap: 34px; }
 .review-summary {
@@ -943,9 +966,14 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   .result-dimensions > div:nth-child(3) { border-left: 0; border-top: 1px solid var(--line); }
   .result-dimensions > div:nth-child(4) { border-top: 1px solid var(--line); }
   .profile-heading { align-items: flex-start; }
-  .profile-settings form { grid-template-columns: 1fr; }
+  .profile-settings > .profile-form { grid-template-columns: 1fr; }
   .profile-actions { grid-column: auto; align-items: stretch; flex-direction: column; }
   .profile-actions .primary-button { width: 100%; }
+  .password-form { grid-template-columns: 1fr; padding: 20px; }
+  .password-form h3, .password-form .primary-button { grid-column: auto; }
+  .password-form .primary-button { width: 100%; }
+  .session-list article { grid-template-columns: 38px minmax(0, 1fr); padding: 12px 0; }
+  .session-list article > button, .session-list article > em { grid-column: 2; justify-self: start; }
   .review-summary { grid-template-columns: 1fr; gap: 10px; }
   .review-summary-card { min-height: 104px; align-items: center; }
   .review-summary-card strong { font-size: 28px; }

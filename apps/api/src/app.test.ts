@@ -89,6 +89,71 @@ describe("learning account flow", () => {
     expect(profile.statusCode).toBe(200);
     expect(profile.json()).toMatchObject({ nickname: "逐光同学", dailyMinutes: 30, preferredAccent: "uk" });
 
+    const secondLogin = await app.inject({
+      method: "POST",
+      url: "/api/auth/login",
+      headers: { "user-agent": "Synthetic iPhone Safari" },
+      payload: { username: "learner_01", password: "a-secure-test-password" },
+    });
+    expect(secondLogin.statusCode).toBe(200);
+    const secondSetCookie = secondLogin.headers["set-cookie"]!;
+    const secondCookie = (Array.isArray(secondSetCookie) ? secondSetCookie[0]! : secondSetCookie).split(";")[0]!;
+
+    const sessionsBeforePassword = await app.inject({
+      method: "GET",
+      url: "/api/me/sessions",
+      headers: { cookie },
+    });
+    expect(sessionsBeforePassword.statusCode).toBe(200);
+    expect(sessionsBeforePassword.json().sessions).toHaveLength(2);
+    expect(sessionsBeforePassword.json().sessions.filter((session: { current: boolean }) => session.current)).toHaveLength(1);
+    expect(sessionsBeforePassword.json().sessions[0]).not.toHaveProperty("tokenHash");
+
+    const wrongCurrentPassword = await app.inject({
+      method: "POST",
+      url: "/api/me/password",
+      headers: { cookie },
+      payload: { currentPassword: "wrong-password", newPassword: "a-new-secure-test-password" },
+    });
+    expect(wrongCurrentPassword.statusCode).toBe(400);
+
+    const passwordChange = await app.inject({
+      method: "POST",
+      url: "/api/me/password",
+      headers: { cookie },
+      payload: { currentPassword: "a-secure-test-password", newPassword: "a-new-secure-test-password" },
+    });
+    expect(passwordChange.statusCode).toBe(200);
+    expect(passwordChange.json()).toMatchObject({ ok: true, otherSessionsRevoked: true });
+
+    const revokedDevice = await app.inject({ method: "GET", url: "/api/me", headers: { cookie: secondCookie } });
+    expect(revokedDevice.statusCode).toBe(401);
+    const oldPasswordLogin = await app.inject({
+      method: "POST",
+      url: "/api/auth/login",
+      payload: { username: "learner_01", password: "a-secure-test-password" },
+    });
+    expect(oldPasswordLogin.statusCode).toBe(401);
+    const newPasswordLogin = await app.inject({
+      method: "POST",
+      url: "/api/auth/login",
+      payload: { username: "learner_01", password: "a-new-secure-test-password" },
+    });
+    expect(newPasswordLogin.statusCode).toBe(200);
+    const newSetCookie = newPasswordLogin.headers["set-cookie"]!;
+    const newDeviceCookie = (Array.isArray(newSetCookie) ? newSetCookie[0]! : newSetCookie).split(";")[0]!;
+    const sessionsAfterLogin = await app.inject({ method: "GET", url: "/api/me/sessions", headers: { cookie } });
+    const removableSession = sessionsAfterLogin.json().sessions.find((session: { current: boolean }) => !session.current);
+    const removeDevice = await app.inject({
+      method: "DELETE",
+      url: `/api/me/sessions/${removableSession.id}`,
+      headers: { cookie },
+    });
+    expect(removeDevice.statusCode).toBe(200);
+    expect(removeDevice.json()).toMatchObject({ ok: true, removedCurrent: false });
+    const removedDevice = await app.inject({ method: "GET", url: "/api/me", headers: { cookie: newDeviceCookie } });
+    expect(removedDevice.statusCode).toBe(401);
+
     const practice = await app.inject({
       method: "POST",
       url: "/api/lessons/1/attempts",
