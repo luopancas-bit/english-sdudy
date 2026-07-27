@@ -61,6 +61,7 @@ describe("learning account flow", () => {
       CONTENT_DIR: contentDirectory,
       RECORDINGS_DIR: path.join(directory, "recordings"),
       SESSION_COOKIE_NAME: "test_session",
+      SESSION_COOKIE_SECURE: false,
       SESSION_TTL_DAYS: 1,
       SESSION_SECRET: secret,
     };

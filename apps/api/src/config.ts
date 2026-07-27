@@ -8,14 +8,25 @@ const configSchema = z.object({
   CONTENT_DIR: z.string().default("./content-private"),
   RECORDINGS_DIR: z.string().default("./recordings"),
   SESSION_COOKIE_NAME: z.string().default("zhuguang_session"),
+  SESSION_COOKIE_SECURE: z.enum(["true", "false"]).optional(),
   SESSION_TTL_DAYS: z.coerce.number().int().min(1).max(90).default(30),
   SESSION_SECRET: z.string().min(32),
   BOOTSTRAP_ADMIN_USERNAME: z.string().min(3).optional(),
   BOOTSTRAP_ADMIN_PASSWORD: z.string().min(12).optional(),
 });
 
-export type AppConfig = z.infer<typeof configSchema>;
+type ParsedConfig = z.infer<typeof configSchema>;
+export type AppConfig = Omit<ParsedConfig, "SESSION_COOKIE_SECURE"> & {
+  SESSION_COOKIE_SECURE: boolean;
+};
 
 export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppConfig {
-  return configSchema.parse(environment);
+  const parsed = configSchema.parse(environment);
+  return {
+    ...parsed,
+    SESSION_COOKIE_SECURE:
+      parsed.SESSION_COOKIE_SECURE === undefined
+        ? parsed.NODE_ENV === "production"
+        : parsed.SESSION_COOKIE_SECURE === "true",
+  };
 }

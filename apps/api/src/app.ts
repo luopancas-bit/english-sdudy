@@ -145,7 +145,7 @@ export async function createApp(
     });
     reply.setCookie(config.SESSION_COOKIE_NAME, token, {
       httpOnly: true,
-      secure: config.NODE_ENV === "production",
+      secure: config.SESSION_COOKIE_SECURE,
       sameSite: "strict",
       path: "/",
       expires,

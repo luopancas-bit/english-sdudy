@@ -28,6 +28,12 @@ pnpm dev
 
 真实课程内容不会进入公开仓库。请把服务器上的私有课程包挂载到 `content-private/`，格式见 `docs/content-contract.md`。
 
+## 部署
+
+Docker Compose 的目录、密钥、8787 内网测试、HTTPS 正式入口和回滚步骤见
+[部署与回滚手册](docs/deployment-runbook.md)。iPhone 录音必须通过浏览器信任的 HTTPS
+入口验收，普通 HTTP 只适合验证不涉及麦克风的功能。
+
 ## 仓库安全边界
 
 这是公开仓库。不得提交真实课程全文、PDF、音频、词典库、账号数据库、录音、备份、服务器地址清单或任何密钥。详细原因和规则见 [仓库文件限制](docs/repository-rules.md)、[远程协作说明](CONTRIBUTING.md)、[安全说明](SECURITY.md) 和 [GitHub 权限设置](docs/github-settings.md)。
