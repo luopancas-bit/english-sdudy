@@ -944,6 +944,22 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .chapter-heading h2 { margin: 6px 0 0; font: 600 clamp(26px, 3vw, 36px) "Noto Serif SC", serif; }
 .chapter-heading h2 i { margin-left: 8px; color: var(--muted); font: italic 18px Georgia, serif; }
 .chapter-heading .primary-button { min-height: 46px; padding: 0 18px; white-space: nowrap; }
+.chapter-heading-actions { display: flex; gap: 10px; }
+.chapter-heading-actions > button {
+  min-height: 46px;
+  padding: 0 18px;
+  border: 1px solid var(--forest);
+  border-radius: 7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  white-space: nowrap;
+  color: var(--forest);
+  background: transparent;
+  cursor: pointer;
+}
+.chapter-heading-actions > button:disabled { opacity: .5; cursor: not-allowed; }
 .training-scope { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin: 22px 0; }
 .training-scope button {
   min-height: 86px; padding: 16px; border: 1px solid var(--line); display: grid;
@@ -988,6 +1004,133 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   min-height: 38px; padding: 0 12px; border: 1px solid var(--forest); border-radius: 7px;
   display: inline-flex; align-items: center; gap: 6px; color: var(--forest); background: transparent; cursor: pointer;
 }
+
+.chapter-study {
+  min-height: min(700px, calc(100vh - 145px));
+  border: 1px solid var(--line);
+  display: grid;
+  grid-template-rows: auto 3px 1fr;
+  background:
+    radial-gradient(circle at 16% 12%, rgba(190, 151, 83, .12), transparent 28%),
+    linear-gradient(145deg, #fdfcf8, #f2efe6);
+  box-shadow: var(--shadow);
+}
+.chapter-study-header {
+  min-height: 74px;
+  padding: 0 clamp(18px, 4vw, 40px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+.chapter-study-header > button {
+  min-height: 40px;
+  border: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+}
+.chapter-study-header > div { display: flex; align-items: center; gap: 18px; }
+.chapter-study-header span { color: var(--muted); font-size: 12px; }
+.chapter-study-header strong { color: var(--forest); font: 600 15px "Noto Serif SC", serif; }
+.chapter-study-progress { height: 3px; overflow: hidden; background: #ded9cd; }
+.chapter-study-progress i { display: block; height: 100%; background: var(--gold); transition: width .25s ease; }
+.chapter-card-stage {
+  width: min(820px, calc(100% - 40px));
+  margin: auto;
+  padding: 44px 0 58px;
+  display: grid;
+  justify-items: center;
+}
+.chapter-card-kicker { color: var(--gold); font-size: 10px; font-weight: 700; letter-spacing: .16em; }
+.chapter-card-stage > article {
+  width: 100%;
+  min-height: 360px;
+  margin-top: 18px;
+  padding: clamp(28px, 5vw, 58px);
+  border: 1px solid #d5cfc1;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  background: rgba(255,255,255,.82);
+  box-shadow: 0 22px 60px rgba(36, 48, 43, .1);
+}
+.chapter-card-stage > article.revealed { border-color: rgba(32,78,66,.45); }
+.chapter-card-word { display: flex; align-items: start; justify-content: space-between; gap: 24px; }
+.chapter-card-word h1 { margin: 0; font: 600 clamp(38px, 7vw, 72px)/1.1 Georgia, serif; color: var(--forest); overflow-wrap: anywhere; }
+.chapter-card-word button {
+  min-height: 42px;
+  padding: 0 13px;
+  border: 1px solid var(--line);
+  border-radius: 99px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--forest);
+  background: #f8f6ef;
+  cursor: pointer;
+}
+.chapter-card-word button:disabled { color: var(--muted); cursor: not-allowed; }
+.chapter-card-answer { align-self: end; margin-top: 40px; padding-top: 26px; border-top: 1px solid var(--line); }
+.chapter-card-answer > button {
+  min-height: 48px;
+  padding: 0 18px;
+  border: 1px solid var(--forest);
+  border-radius: 7px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--forest);
+  background: transparent;
+  cursor: pointer;
+}
+.chapter-card-answer > span { color: var(--gold); font-size: 11px; font-weight: 700; }
+.chapter-card-answer h2 { margin: 8px 0 0; font: 600 clamp(24px, 4vw, 34px) "Noto Serif SC", serif; }
+.chapter-card-answer blockquote { margin: 16px 0 0; color: var(--muted); font: italic 16px/1.7 Georgia, serif; }
+.chapter-card-controls {
+  width: 100%;
+  margin-top: 20px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+.chapter-card-controls button, .chapter-study-actions button {
+  min-height: 46px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  color: var(--ink);
+  background: var(--surface);
+  cursor: pointer;
+}
+.chapter-card-controls button:disabled { opacity: .4; cursor: not-allowed; }
+.chapter-card-controls .needs-work { color: #a84132; border-color: #cf9d94; }
+.chapter-card-controls .known, .chapter-card-controls .next-card { color: #fff; border-color: var(--forest); background: var(--forest); }
+.chapter-card-controls .next-card { grid-column: span 2; }
+.chapter-study-complete, .chapter-study-empty {
+  min-height: min(650px, calc(100vh - 145px));
+  padding: 50px 28px;
+  place-content: center;
+  justify-items: center;
+  text-align: center;
+  color: var(--forest);
+}
+.chapter-study-complete > span { display: inline-flex; align-items: center; gap: 7px; font-weight: 700; }
+.chapter-study-complete h1, .chapter-study-empty h2 { margin: 14px 0 8px; font: 600 clamp(30px, 5vw, 46px) "Noto Serif SC", serif; color: var(--ink); }
+.chapter-study-complete > p { max-width: 650px; margin: 0; color: var(--muted); line-height: 1.8; }
+.chapter-study-result { width: min(560px, 100%); margin: 28px 0; display: grid; grid-template-columns: repeat(3, 1fr); border-block: 1px solid var(--line); }
+.chapter-study-result span { min-height: 92px; display: grid; place-content: center; gap: 5px; }
+.chapter-study-result span + span { border-left: 1px solid var(--line); }
+.chapter-study-result small { color: var(--muted); }
+.chapter-study-result strong { font: 600 26px "Noto Serif SC", serif; }
+.chapter-study-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.chapter-study-actions .primary-button { color: #fff; border-color: var(--forest); background: var(--forest); }
 
 .typing-session {
   min-height: min(680px, calc(100vh - 150px));
@@ -1271,11 +1414,23 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   .chapter-picker button { min-width: 210px; border-bottom: 0; border-right: 1px solid var(--line); }
   .chapter-picker button.active { box-shadow: inset 0 -3px var(--gold); }
   .chapter-heading { align-items: stretch; flex-direction: column; }
-  .chapter-heading .primary-button { width: 100%; }
+  .chapter-heading-actions { display: grid; grid-template-columns: 1fr; }
+  .chapter-heading-actions > button { width: 100%; }
   .training-scope { grid-template-columns: 1fr; }
   .chapter-training-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .word-memory-list article { grid-template-columns: 40px minmax(0, 1fr); }
   .word-memory-list button { grid-column: 2; width: 100%; justify-content: center; }
+  .chapter-study { min-height: calc(100vh - 118px); border-inline: 0; }
+  .chapter-study-header { min-height: 66px; padding: 0 16px; }
+  .chapter-study-header span { display: none; }
+  .chapter-card-stage { width: min(100% - 28px, 620px); padding: 30px 0 42px; }
+  .chapter-card-stage > article { min-height: 340px; padding: 28px 22px; }
+  .chapter-card-word { align-items: stretch; flex-direction: column; }
+  .chapter-card-word button { align-self: start; }
+  .chapter-card-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .chapter-card-controls .next-card { grid-column: auto; }
+  .chapter-study-actions { width: 100%; display: grid; }
+  .chapter-study-actions button { width: 100%; }
   .typing-session { min-height: calc(100vh - 118px); border-inline: 0; }
   .typing-header { min-height: 66px; padding: 0 16px; }
   .typing-header span { display: none; }

@@ -8,6 +8,7 @@ import {
   Keyboard,
   LibraryBig,
   MessageSquareText,
+  Play,
 } from "lucide-react";
 import { api } from "../../api";
 import { demoLesson } from "../../demo";
@@ -19,6 +20,7 @@ import type {
   WordMemoryStats,
 } from "../../types";
 import { QwertyTraining } from "./QwertyTraining";
+import { ChapterWordStudy, type ChapterStudyCard } from "./ChapterWordStudy";
 
 const demoChapters: WordMemoryChapter[] = [
   { lessonId: 8, titleEn: "Computer", titleZh: "电脑", vocabularyCount: 3, sentenceCount: 3 },
@@ -33,6 +35,7 @@ export function WordMemory({ demo }: { demo: boolean }) {
   const [includeWords, setIncludeWords] = useState(true);
   const [includeSentences, setIncludeSentences] = useState(false);
   const [training, setTraining] = useState<TypingTrainingEntry[] | null>(null);
+  const [studying, setStudying] = useState(false);
   const [stats, setStats] = useState<WordMemoryStats | null>(null);
   const [preparing, setPreparing] = useState(false);
   const [error, setError] = useState("");
@@ -94,18 +97,31 @@ export function WordMemory({ demo }: { demo: boolean }) {
       })) : []),
     ];
   }, [includeSentences, includeWords, lesson]);
+  const studyCards = useMemo<ChapterStudyCard[]>(() => {
+    if (!lesson) return [];
+    return lesson.vocabulary.map((word) => ({
+      term: word.term,
+      meaning: word.definition,
+      example: lesson.sentences.find((sentence) =>
+        sentence.text.toLocaleLowerCase("en-US").includes(word.term.toLocaleLowerCase("en-US"))
+      )?.text ?? null,
+    }));
+  }, [lesson]);
 
-  async function prepareTraining(single?: { kind: "word" | "sentence"; index: number }) {
+  async function prepareTraining(
+    single?: { kind: "word" | "sentence"; index: number },
+    wordsOnly = false,
+  ) {
     if (!lesson || preparing) return;
     setPreparing(true);
     setError("");
     try {
       const words = single?.kind === "word"
         ? lesson.vocabulary.slice(single.index, single.index + 1)
-        : single ? [] : includeWords ? lesson.vocabulary : [];
+        : single ? [] : wordsOnly || includeWords ? lesson.vocabulary : [];
       const sentences = single?.kind === "sentence"
         ? lesson.sentences.slice(single.index, single.index + 1)
-        : single ? [] : includeSentences ? lesson.sentences : [];
+        : single || wordsOnly ? [] : includeSentences ? lesson.sentences : [];
       const savedWords: VocabularyEntry[] = demo
         ? words.map((word, index) => ({
             id: `demo-chapter-${lesson.id}-${index}`,
@@ -160,6 +176,26 @@ export function WordMemory({ demo }: { demo: boolean }) {
     );
   }
 
+  if (studying && lesson) {
+    return (
+      <ChapterWordStudy
+        chapterLabel={`第 ${String(lesson.id).padStart(2, "0")} 章 · ${lesson.titleZh}`}
+        cards={studyCards}
+        onClose={() => setStudying(false)}
+        onTrainCard={(index) => {
+          setStudying(false);
+          void prepareTraining({ kind: "word", index });
+        }}
+        onTrainChapter={() => {
+          setStudying(false);
+          setIncludeWords(true);
+          setIncludeSentences(false);
+          void prepareTraining(undefined, true);
+        }}
+      />
+    );
+  }
+
   if (error && !chapters.length) {
     return <section className="vocabulary-state error"><AlertCircle size={42} /><h2>暂时无法打开单词记忆</h2><p>{error}</p></section>;
   }
@@ -204,9 +240,14 @@ export function WordMemory({ demo }: { demo: boolean }) {
             <>
               <header className="chapter-heading">
                 <div><small>第 {String(lesson.id).padStart(2, "0")} 章</small><h2>{selectedChapter?.titleZh ?? lesson.titleZh} <i>{selectedChapter?.titleEn ?? lesson.titleEn}</i></h2></div>
-                <button className="primary-button" disabled={!selectedCount || preparing} onClick={() => void prepareTraining()}>
-                  <Keyboard size={18} />{preparing ? "正在准备…" : `训练整章所选 ${selectedCount} 项`}
-                </button>
+                <div className="chapter-heading-actions">
+                  <button disabled={!lesson.vocabulary.length} onClick={() => setStudying(true)}>
+                    <Play size={18} />学习本章
+                  </button>
+                  <button className="primary-button" disabled={!selectedCount || preparing} onClick={() => void prepareTraining()}>
+                    <Keyboard size={18} />{preparing ? "正在准备…" : `训练整章所选 ${selectedCount} 项`}
+                  </button>
+                </div>
               </header>
 
               <div className="training-scope" aria-label="训练范围">
