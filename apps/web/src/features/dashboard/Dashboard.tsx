@@ -19,6 +19,7 @@ import { AssessmentView } from "../lesson/AssessmentView";
 import { LessonStudyView } from "../lesson/LessonStudyView";
 import { ProfileSettings } from "../profile/ProfileSettings";
 import { ReviewCenter } from "../review/ReviewCenter";
+import { LearningReport } from "../report/LearningReport";
 import { VocabularyBook } from "../vocabulary/VocabularyBook";
 
 const navItems = [
@@ -90,7 +91,7 @@ export function Dashboard({
         </nav>
         <div className="profile-summary">
           <span className="avatar">{data.learner.nickname.slice(0, 1)}</span>
-          <div><strong>{data.learner.nickname}</strong><small>坚持学习第 23 天</small></div>
+          <div><strong>{data.learner.nickname}</strong><small>{data.studyStreak ? `连续学习第 ${data.studyStreak} 天` : "从今天开始积累"}</small></div>
         </div>
         <button className="logout-button" onClick={onLogout}><LogOut size={19} />退出登录</button>
       </aside>
@@ -99,7 +100,7 @@ export function Dashboard({
         <header className="topbar">
           <div>
             <h1>{active === "today" ? "下午好，今天先巩固，再向前一步" : active === "settings" ? "个人设置" : navItems.find(([id]) => id === active)?.[1]}</h1>
-            <p>{active === "today" ? "依据遗忘曲线与掌握情况，为你生成个性化学习计划。" : active === "settings" ? "管理你的昵称、学习目标和发音偏好。" : active === "map" ? "依次完成正式考核，解锁下一课；复习到期时优先巩固。" : active === "review" ? "按到期时间巩固记忆，并集中处理反复出错的内容。" : active === "vocabulary" ? "收藏需要反复接触的单词与短语，掌握后随时归档。" : "该模块将在第一阶段后续迭代中接入真实数据。"}</p>
+            <p>{active === "today" ? "依据遗忘曲线与掌握情况，为你生成个性化学习计划。" : active === "settings" ? "管理你的昵称、学习目标和发音偏好。" : active === "map" ? "依次完成正式考核，解锁下一课；复习到期时优先巩固。" : active === "review" ? "按到期时间巩固记忆，并集中处理反复出错的内容。" : active === "vocabulary" ? "收藏需要反复接触的单词与短语，掌握后随时归档。" : "从学习频率、四维能力和逐课掌握度检查真实进步。"}</p>
           </div>
           <div className="top-actions"><button aria-label="提醒"><Bell size={20} /></button><button aria-label="设置" onClick={() => setActive("settings")}><Settings size={20} /></button></div>
         </header>
@@ -126,16 +127,16 @@ export function Dashboard({
                   <path className="path-shadow" d="M45 150 C210 110 340 132 430 90 S600 82 715 24" />
                   <path className="path-line" d="M45 145 C210 105 340 127 430 85 S600 77 715 19" />
                 </svg>
-                <PlanStop icon={<Clock3 />} title="到期复习" duration="12 分钟" note="巩固记忆，夯实基础" x="7%" y="61%" />
-                <PlanStop icon={<Target />} title="薄弱项" duration="6 分钟" note="攻克弱点，提升能力" x="39%" y="42%" tone="gold" />
-                <PlanStop icon={<BookOpen />} title="新课学习" duration="10 分钟" note="学习新知，向前一步" x="68%" y="21%" />
+                <PlanStop icon={<Clock3 />} title="到期复习" duration={`${data.plan.reviewMinutes} 分钟`} note={`${data.dueReviews} 项复习到期`} x="7%" y="61%" />
+                <PlanStop icon={<Target />} title="薄弱项" duration={`${data.plan.weakMinutes} 分钟`} note={`${data.weakItems} 个错题待巩固`} x="39%" y="42%" tone="gold" />
+                <PlanStop icon={<BookOpen />} title="新课学习" duration={`${data.plan.newLessonMinutes} 分钟`} note="学习新知，向前一步" x="68%" y="21%" />
                 <button className="start-orb" onClick={() => setStudyLessonId(data.currentLesson)}>
-                  <img src="/brand-mark.svg" alt="" /><span>开始今日学习</span><small>预计用时 28 分钟</small>
+                  <img src="/brand-mark.svg" alt="" /><span>开始今日学习</span><small>预计用时 {data.plan.reviewMinutes + data.plan.weakMinutes + data.plan.newLessonMinutes} 分钟</small>
                 </button>
               </div>
 
               <section className="history">
-                <div className="section-heading"><h2>最近学习记录</h2><button>查看全部</button></div>
+                <div className="section-heading"><h2>最近学习记录</h2><button onClick={() => setActive("report")}>查看全部</button></div>
                 <div className="history-table" role="table">
                   {data.history.map((item) => {
                     const status = item.score >= 90 ? "长期掌握" : item.score >= 80 ? "已掌握" : "待巩固";
@@ -159,7 +160,16 @@ export function Dashboard({
               <Skill label="精读" value={data.dimensions.reading} />
               <Skill label="跟读" value={data.dimensions.speaking} warning />
               <Skill label="听写" value={data.dimensions.writing} warning />
-              <div className="next-review"><h3>下一次复习</h3><time>今天 18:30</time><strong>第 05 课　互联网</strong><span>待巩固</span></div>
+              <div className="next-review">
+                <h3>下一次复习</h3>
+                {data.nextReview ? (
+                  <>
+                    <time>{formatReviewTime(data.nextReview.dueAt)}</time>
+                    <strong>第 {String(data.nextReview.lessonId).padStart(2, "0")} 课　{data.nextReview.title}</strong>
+                    <span>{new Date(data.nextReview.dueAt).getTime() <= Date.now() ? "已经到期" : "计划复习"}</span>
+                  </>
+                ) : <p>完成正式考核后生成复习计划。</p>}
+              </div>
             </aside>
           </div>
         ) : active === "review" ? (
@@ -177,12 +187,27 @@ export function Dashboard({
           />
         ) : active === "vocabulary" ? (
           <VocabularyBook demo={demo} />
+        ) : active === "report" ? (
+          <LearningReport demo={demo} />
         ) : (
           <section className="module-placeholder"><BookOpen size={48} /><h2>{navItems.find(([id]) => id === active)?.[1]}</h2><p>数据模块边界已经保留，将按第一阶段顺序接入。</p></section>
         )}
       </main>
     </div>
   );
+}
+
+function formatReviewTime(value: string) {
+  const date = new Date(value);
+  const today = new Date();
+  const tomorrow = new Date();
+  tomorrow.setDate(today.getDate() + 1);
+  const datePart = date.toDateString() === today.toDateString()
+    ? "今天"
+    : date.toDateString() === tomorrow.toDateString()
+      ? "明天"
+      : new Intl.DateTimeFormat("zh-CN", { month: "numeric", day: "numeric" }).format(date);
+  return `${datePart} ${new Intl.DateTimeFormat("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false }).format(date)}`;
 }
 
 function formatAttemptTime(value: string) {

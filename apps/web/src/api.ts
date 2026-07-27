@@ -1,4 +1,4 @@
-import type { Assessment, AttemptResult, CourseMapData, DashboardData, LessonContent, ReviewCenterData, User, VocabularyData, VocabularyEntry, VocabularyInput } from "./types";
+import type { Assessment, AttemptResult, CourseMapData, DashboardData, LearningReportData, LessonContent, ReviewCenterData, User, VocabularyData, VocabularyEntry, VocabularyInput } from "./types";
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, {
@@ -39,6 +39,7 @@ export const api = {
     }),
   dashboard: () => request<DashboardData>("/api/dashboard"),
   courseMap: () => request<CourseMapData>("/api/course-map"),
+  learningReport: () => request<LearningReportData>("/api/learning-report"),
   vocabulary: () => request<VocabularyData>("/api/vocabulary"),
   addVocabulary: (input: VocabularyInput) =>
     request<VocabularyEntry>("/api/vocabulary", {

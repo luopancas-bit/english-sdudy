@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { and, asc, desc, eq, gte, isNull, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNull, sql } from "drizzle-orm";
 import {
   attempts,
   invitations,
@@ -287,21 +287,49 @@ export class LearningRepository {
   }
 
   async dashboard(userId: string, now: string) {
-    const mastery = await this.database.query.lessonMastery.findMany({
-      where: eq(lessonMastery.userId, userId),
-    });
-    const reviews = await this.database.query.reviewQueue.findMany({
-      where: and(eq(reviewQueue.userId, userId), lte(reviewQueue.dueAt, now)),
-      orderBy: [asc(reviewQueue.dueAt)],
-    });
-    const wrong = await this.database.query.wrongAnswers.findMany({
-      where: and(eq(wrongAnswers.userId, userId), isNull(wrongAnswers.resolvedAt)),
-    });
-    const recentAttempts = await this.database.query.attempts.findMany({
-      where: eq(attempts.userId, userId),
-      orderBy: [desc(attempts.occurredAt)],
-      limit: 5,
-    });
-    return { mastery, reviews, wrong, recentAttempts };
+    const [mastery, allReviews, wrong, recentAttempts, progressAttempts] = await Promise.all([
+      this.database.query.lessonMastery.findMany({
+        where: eq(lessonMastery.userId, userId),
+      }),
+      this.database.query.reviewQueue.findMany({
+        where: eq(reviewQueue.userId, userId),
+        orderBy: [asc(reviewQueue.dueAt)],
+      }),
+      this.database.query.wrongAnswers.findMany({
+        where: and(eq(wrongAnswers.userId, userId), isNull(wrongAnswers.resolvedAt)),
+      }),
+      this.database.query.attempts.findMany({
+        where: eq(attempts.userId, userId),
+        orderBy: [desc(attempts.occurredAt)],
+        limit: 5,
+      }),
+      this.database.query.attempts.findMany({
+        where: eq(attempts.userId, userId),
+        orderBy: [desc(attempts.occurredAt)],
+      }),
+    ]);
+    return {
+      mastery,
+      reviews: allReviews.filter((item) => item.dueAt <= now),
+      nextReview: allReviews[0] ?? null,
+      wrong,
+      recentAttempts,
+      progressAttempts,
+    };
+  }
+
+  async learningReport(userId: string) {
+    const [attemptRows, mastery] = await Promise.all([
+      this.database.query.attempts.findMany({
+        where: eq(attempts.userId, userId),
+        orderBy: [desc(attempts.occurredAt)],
+        limit: 200,
+      }),
+      this.database.query.lessonMastery.findMany({
+        where: eq(lessonMastery.userId, userId),
+        orderBy: [asc(lessonMastery.lessonId)],
+      }),
+    ]);
+    return { attempts: attemptRows, mastery };
   }
 }

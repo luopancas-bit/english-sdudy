@@ -140,6 +140,9 @@ describe("learning account flow", () => {
     expect(dashboardBody).toMatchObject({
       learner: { nickname: "逐光同学" },
       currentLesson: 2,
+      studyStreak: 1,
+      nextReview: { lessonId: 1, title: "合成课程" },
+      plan: { reviewMinutes: 0, weakMinutes: 0, newLessonMinutes: 30 },
     });
     expect(dashboardBody.history).toHaveLength(3);
     expect(dashboardBody.history[0]).toMatchObject({ lessonId: 1, title: "合成课程", score: 100 });
@@ -199,6 +202,26 @@ describe("learning account flow", () => {
         { lessonId: 1, title: "合成课程", unlocked: true, state: "mastered", score: 100 },
         { lessonId: 2, title: "第二合成课程", unlocked: true, state: "review-due", score: 0 },
         { lessonId: 3, title: "第三合成课程", unlocked: true, state: "ready", score: null },
+      ],
+    });
+
+    const report = await app.inject({
+      method: "GET",
+      url: "/api/learning-report",
+      headers: { cookie },
+    });
+    expect(report.statusCode).toBe(200);
+    expect(report.json()).toMatchObject({
+      summary: {
+        totalAttempts: 4,
+        studiedDays: 1,
+        studyStreak: 1,
+        averageScore: 75,
+      },
+      dimensions: { listening: 75, reading: 75, speaking: 75, writing: 75 },
+      lessons: [
+        { lessonId: 1, title: "合成课程", score: 100 },
+        { lessonId: 2, title: "第二合成课程", score: 0 },
       ],
     });
 

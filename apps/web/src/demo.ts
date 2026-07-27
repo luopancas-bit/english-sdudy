@@ -21,6 +21,17 @@ export const demoDashboard: DashboardData = {
     { id: "demo-6", lessonId: 6, title: "电子邮件", kind: "review", score: 84, occurredAt: "2026-07-23T12:15:00Z" },
     { id: "demo-5", lessonId: 5, title: "互联网", kind: "review", score: 92, occurredAt: "2026-07-21T10:40:00Z" },
   ],
+  studyStreak: 3,
+  nextReview: {
+    lessonId: 5,
+    title: "互联网",
+    dueAt: "2026-07-27T10:30:00+08:00",
+  },
+  plan: {
+    reviewMinutes: 12,
+    weakMinutes: 6,
+    newLessonMinutes: 10,
+  },
 };
 
 export const demoAssessment: Assessment = {

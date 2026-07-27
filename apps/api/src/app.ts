@@ -214,7 +214,15 @@ export async function createApp(
     const average = data.mastery.length
       ? Math.round(data.mastery.reduce((total, item) => total + item.score, 0) / data.mastery.length)
       : 0;
-    const currentLesson = Math.min(3, Math.max(1, mastered.length + 1));
+    const attemptedLessons = new Set(
+      data.progressAttempts
+        .filter((attempt) => attempt.kind !== "practice")
+        .map((attempt) => attempt.lessonId),
+    );
+    const currentLesson = Array.from(
+      { length: COURSE_MAP_LESSON_COUNT },
+      (_item, index) => index + 1,
+    ).find((lessonId) => !attemptedLessons.has(lessonId)) ?? COURSE_MAP_LESSON_COUNT;
     const currentAssessment = await content.loadAssessment(currentLesson);
     const history = await Promise.all(
       data.recentAttempts.map(async (attempt) => {
@@ -229,6 +237,9 @@ export async function createApp(
         };
       }),
     );
+    const nextReviewAssessment = data.nextReview
+      ? await content.loadAssessment(data.nextReview.lessonId)
+      : null;
     return {
       learner: publicUser(user),
       longTermMastery: average,
@@ -238,6 +249,79 @@ export async function createApp(
       currentLessonTitle: currentAssessment.title,
       dimensions: aggregateDimensions(data.mastery),
       history,
+      studyStreak: calculateStudyStreak(data.progressAttempts.map((attempt) => attempt.occurredAt)),
+      nextReview: data.nextReview && nextReviewAssessment
+        ? {
+            lessonId: data.nextReview.lessonId,
+            title: nextReviewAssessment.title,
+            dueAt: data.nextReview.dueAt,
+          }
+        : null,
+      plan: {
+        reviewMinutes: Math.min(20, data.reviews.length * 5),
+        weakMinutes: Math.min(15, data.wrong.length * 2),
+        newLessonMinutes: Math.max(10, user.dailyMinutes - Math.min(20, data.reviews.length * 5) - Math.min(15, data.wrong.length * 2)),
+      },
+    };
+  });
+
+  app.get("/api/learning-report", async (request, reply) => {
+    const user = await requireUser(request, reply);
+    if (!user) return;
+    const data = await repository.learningReport(user.id);
+    const lessonIds = Array.from(new Set([
+      ...data.attempts.map((attempt) => attempt.lessonId),
+      ...data.mastery.map((item) => item.lessonId),
+    ]));
+    const assessmentEntries = await Promise.all(
+      lessonIds.map(async (lessonId) => [lessonId, await content.loadAssessment(lessonId)] as const),
+    );
+    const titles = new Map(assessmentEntries.map(([lessonId, assessment]) => [lessonId, assessment.title]));
+    const studyDates = new Set(data.attempts.map((attempt) => dateKey(attempt.occurredAt)));
+    const daily = new Map<string, { total: number; attempts: number }>();
+    for (const attempt of data.attempts) {
+      const key = dateKey(attempt.occurredAt);
+      const current = daily.get(key) ?? { total: 0, attempts: 0 };
+      current.total += attempt.total;
+      current.attempts += 1;
+      daily.set(key, current);
+    }
+    const averageScore = data.attempts.length
+      ? Math.round(data.attempts.reduce((total, attempt) => total + attempt.total, 0) / data.attempts.length)
+      : 0;
+    return {
+      summary: {
+        totalAttempts: data.attempts.length,
+        studiedDays: studyDates.size,
+        studyStreak: calculateStudyStreak(data.attempts.map((attempt) => attempt.occurredAt)),
+        averageScore,
+      },
+      dimensions: data.attempts.length
+        ? {
+            listening: average(data.attempts.map((item) => item.listening)),
+            reading: average(data.attempts.map((item) => item.reading)),
+            speaking: average(data.attempts.map((item) => item.speaking)),
+            writing: average(data.attempts.map((item) => item.writing)),
+          }
+        : { listening: 0, reading: 0, speaking: 0, writing: 0 },
+      daily: Array.from(daily, ([date, value]) => ({
+        date,
+        attempts: value.attempts,
+        averageScore: Math.round(value.total / value.attempts),
+      })).sort((left, right) => left.date.localeCompare(right.date)).slice(-14),
+      lessons: data.mastery.map((item) => ({
+        lessonId: item.lessonId,
+        title: titles.get(item.lessonId) ?? `第 ${item.lessonId} 课`,
+        score: Math.round(item.score),
+        band: item.band,
+        dimensions: {
+          listening: Math.round(item.listening),
+          reading: Math.round(item.reading),
+          speaking: Math.round(item.speaking),
+          writing: Math.round(item.writing),
+        },
+        updatedAt: item.updatedAt,
+      })),
     };
   });
 
@@ -541,4 +625,39 @@ function vocabularyResponse<T extends { status: string }>(entries: T[]) {
 
 function normalizeVocabularyTerm(term: string) {
   return term.trim().toLocaleLowerCase("en-US").replace(/\s+/g, " ");
+}
+
+function average(values: number[]) {
+  return Math.round(values.reduce((total, value) => total + value, 0) / values.length);
+}
+
+function dateKey(value: string | Date) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(value));
+}
+
+function calculateStudyStreak(values: string[]) {
+  const dates = new Set(values.map(dateKey));
+  if (!dates.size) return 0;
+  const cursor = new Date();
+  let streak = 0;
+  for (;;) {
+    if (!dates.has(dateKey(cursor))) {
+      if (streak === 0) {
+        cursor.setDate(cursor.getDate() - 1);
+        if (dates.has(dateKey(cursor))) {
+          streak += 1;
+          cursor.setDate(cursor.getDate() - 1);
+          continue;
+        }
+      }
+      return streak;
+    }
+    streak += 1;
+    cursor.setDate(cursor.getDate() - 1);
+  }
 }

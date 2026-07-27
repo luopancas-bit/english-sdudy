@@ -29,6 +29,17 @@ export interface DashboardData {
     score: number;
     occurredAt: string;
   }>;
+  studyStreak: number;
+  nextReview: {
+    lessonId: number;
+    title: string;
+    dueAt: string;
+  } | null;
+  plan: {
+    reviewMinutes: number;
+    weakMinutes: number;
+    newLessonMinutes: number;
+  };
 }
 
 export interface Assessment {
@@ -161,4 +172,27 @@ export interface VocabularyInput {
   meaning: string;
   example?: string | null;
   lessonId?: number | null;
+}
+
+export interface LearningReportData {
+  summary: {
+    totalAttempts: number;
+    studiedDays: number;
+    studyStreak: number;
+    averageScore: number;
+  };
+  dimensions: DashboardData["dimensions"];
+  daily: Array<{
+    date: string;
+    attempts: number;
+    averageScore: number;
+  }>;
+  lessons: Array<{
+    lessonId: number;
+    title: string;
+    score: number;
+    band: string;
+    dimensions: DashboardData["dimensions"];
+    updatedAt: string;
+  }>;
 }
