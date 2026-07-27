@@ -193,6 +193,15 @@ export interface VocabularyInput {
   lessonId?: number | null;
 }
 
+export interface VocabularyTrainingInput {
+  entryId: string;
+  mode: "guided" | "dictation";
+  firstTryCorrect: boolean;
+  correctionCount: number;
+  durationMs: number;
+  device: "desktop" | "mobile";
+}
+
 export interface LearningReportData {
   summary: {
     totalAttempts: number;

@@ -2,15 +2,16 @@ import { useDeferredValue, useEffect, useState, type FormEvent } from "react";
 import {
   AlertCircle,
   BookMarked,
-  Check,
   CircleDashed,
   Plus,
   RotateCcw,
   Search,
+  Keyboard,
 } from "lucide-react";
 import { api } from "../../api";
 import { demoVocabulary } from "../../demo";
 import type { VocabularyData, VocabularyEntry, VocabularyInput } from "../../types";
+import { QwertyTraining } from "./QwertyTraining";
 
 type Filter = "all" | VocabularyEntry["status"];
 
@@ -19,7 +20,7 @@ export function VocabularyBook({ demo }: { demo: boolean }) {
   const [error, setError] = useState("");
   const [formError, setFormError] = useState("");
   const [saving, setSaving] = useState(false);
-  const [updatingId, setUpdatingId] = useState("");
+  const [trainingEntries, setTrainingEntries] = useState<VocabularyEntry[] | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query);
@@ -78,21 +79,6 @@ export function VocabularyBook({ demo }: { demo: boolean }) {
     }
   }
 
-  async function toggleStatus(entry: VocabularyEntry) {
-    const status = entry.status === "learning" ? "mastered" : "learning";
-    setUpdatingId(entry.id);
-    try {
-      const updated: VocabularyEntry = demo
-        ? { ...entry, status, updatedAt: new Date().toISOString() }
-        : await api.updateVocabularyStatus(entry.id, status);
-      setData((current) => current ? vocabularyDataWithEntry(current, updated) : current);
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "生词状态更新失败");
-    } finally {
-      setUpdatingId("");
-    }
-  }
-
   if (error) {
     return (
       <section className="vocabulary-state error" role="alert">
@@ -118,6 +104,10 @@ export function VocabularyBook({ demo }: { demo: boolean }) {
     if (!normalizedQuery) return true;
     return `${entry.term} ${entry.meaning} ${entry.example ?? ""}`.toLocaleLowerCase("en-US").includes(normalizedQuery);
   });
+  if (trainingEntries) {
+    return <QwertyTraining entries={trainingEntries} demo={demo} onClose={() => setTrainingEntries(null)} />;
+  }
+  const trainingLimit = window.matchMedia("(max-width: 700px)").matches ? 10 : 20;
 
   return (
     <section className="vocabulary-book">
@@ -171,6 +161,13 @@ export function VocabularyBook({ demo }: { demo: boolean }) {
                 </button>
               ))}
             </div>
+            <button
+              className="vocabulary-train-all"
+              disabled={!visibleEntries.length}
+              onClick={() => setTrainingEntries(visibleEntries.slice(0, trainingLimit))}
+            >
+              <Keyboard size={17} />训练这一组
+            </button>
           </div>
 
           {visibleEntries.length ? (
@@ -185,9 +182,9 @@ export function VocabularyBook({ demo }: { demo: boolean }) {
                     <p className="meaning">{entry.meaning}</p>
                     {entry.example ? <blockquote>{entry.example}</blockquote> : null}
                   </div>
-                  <button disabled={updatingId === entry.id} onClick={() => void toggleStatus(entry)}>
-                    {entry.status === "learning" ? <Check size={17} /> : <RotateCcw size={17} />}
-                    {entry.status === "learning" ? "标记已掌握" : "继续学习"}
+                  <button onClick={() => setTrainingEntries([entry])}>
+                    {entry.status === "learning" ? <Keyboard size={17} /> : <RotateCcw size={17} />}
+                    {entry.status === "learning" ? "开始键入训练" : "继续巩固"}
                   </button>
                 </article>
               ))}

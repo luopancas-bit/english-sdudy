@@ -9,6 +9,7 @@ import {
   sessions,
   users,
   vocabularyEntries,
+  vocabularyTrainingAttempts,
   wrongAnswers,
   type Database,
 } from "@zhuguang/database";
@@ -333,6 +334,28 @@ export class LearningRepository {
     return this.database.query.vocabularyEntries.findFirst({
       where: and(eq(vocabularyEntries.id, entryId), eq(vocabularyEntries.userId, userId)),
     });
+  }
+
+  async saveVocabularyTrainingAttempt(input: {
+    userId: string;
+    entryId: string;
+    mode: "guided" | "dictation";
+    firstTryCorrect: boolean;
+    correctionCount: number;
+    durationMs: number;
+    device: "desktop" | "mobile";
+  }) {
+    const entry = await this.database.query.vocabularyEntries.findFirst({
+      where: and(eq(vocabularyEntries.id, input.entryId), eq(vocabularyEntries.userId, input.userId)),
+    });
+    if (!entry) return null;
+    const attempt = {
+      id: crypto.randomUUID(),
+      occurredAt: new Date().toISOString(),
+      ...input,
+    };
+    await this.database.insert(vocabularyTrainingAttempts).values(attempt);
+    return attempt;
   }
 
   async dashboard(userId: string, now: string) {

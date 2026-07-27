@@ -372,10 +372,28 @@ describe("learning account flow", () => {
       headers: { cookie },
       payload: { status: "mastered" },
     });
-    expect(vocabularyMastered.statusCode).toBe(200);
+    expect(vocabularyMastered.statusCode).toBe(409);
     expect(vocabularyMastered.json()).toMatchObject({
-      id: vocabularyCreate.json().id,
-      status: "mastered",
+      error: "单词必须通过正式考核才能标记为已掌握",
+    });
+
+    const vocabularyTraining = await app.inject({
+      method: "POST",
+      url: "/api/vocabulary/training-attempts",
+      headers: { cookie },
+      payload: {
+        entryId: vocabularyCreate.json().id,
+        mode: "guided",
+        firstTryCorrect: false,
+        correctionCount: 2,
+        durationMs: 4_200,
+        device: "desktop",
+      },
+    });
+    expect(vocabularyTraining.statusCode).toBe(201);
+    expect(vocabularyTraining.json()).toMatchObject({
+      attemptId: expect.any(String),
+      occurredAt: expect.any(String),
     });
 
     await app.close();

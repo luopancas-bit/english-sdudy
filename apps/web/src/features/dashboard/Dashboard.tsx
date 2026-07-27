@@ -100,7 +100,7 @@ export function Dashboard({
         <header className="topbar">
           <div>
             <h1>{active === "today" ? "下午好，今天先巩固，再向前一步" : active === "settings" ? "个人设置" : navItems.find(([id]) => id === active)?.[1]}</h1>
-            <p>{active === "today" ? "依据遗忘曲线与掌握情况，为你生成个性化学习计划。" : active === "settings" ? "管理你的昵称、学习目标和发音偏好。" : active === "map" ? "依次完成正式考核，解锁下一课；复习到期时优先巩固。" : active === "review" ? "按到期时间巩固记忆，并集中处理反复出错的内容。" : active === "vocabulary" ? "收藏需要反复接触的单词与短语，掌握后随时归档。" : "从学习频率、四维能力和逐课掌握度检查真实进步。"}</p>
+            <p>{active === "today" ? "依据遗忘曲线与掌握情况，为你生成个性化学习计划。" : active === "settings" ? "管理你的昵称、学习目标和发音偏好。" : active === "map" ? "依次完成正式考核，解锁下一课；复习到期时优先巩固。" : active === "review" ? "按到期时间巩固记忆，并集中处理反复出错的内容。" : active === "vocabulary" ? "通过键入训练留下学习证据；只有正式考核达标，才能算真正掌握。" : "从学习频率、四维能力和逐课掌握度检查真实进步。"}</p>
           </div>
           <div className="top-actions"><button aria-label="提醒"><Bell size={20} /></button><button aria-label="设置" onClick={() => setActive("settings")}><Settings size={20} /></button></div>
         </header>

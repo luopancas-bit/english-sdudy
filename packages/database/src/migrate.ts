@@ -130,4 +130,25 @@ export async function migrate(database: Database): Promise<void> {
     CREATE INDEX IF NOT EXISTS vocabulary_user_status_idx
     ON vocabulary_entries(user_id, status, updated_at)
   `);
+  await database.run(sql`
+    CREATE TABLE IF NOT EXISTS vocabulary_training_attempts (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      entry_id TEXT NOT NULL REFERENCES vocabulary_entries(id) ON DELETE CASCADE,
+      mode TEXT NOT NULL,
+      first_try_correct INTEGER NOT NULL,
+      correction_count INTEGER NOT NULL,
+      duration_ms INTEGER NOT NULL,
+      device TEXT NOT NULL,
+      occurred_at TEXT NOT NULL
+    )
+  `);
+  await database.run(sql`
+    CREATE INDEX IF NOT EXISTS vocabulary_training_user_idx
+    ON vocabulary_training_attempts(user_id, occurred_at)
+  `);
+  await database.run(sql`
+    CREATE INDEX IF NOT EXISTS vocabulary_training_entry_idx
+    ON vocabulary_training_attempts(user_id, entry_id, occurred_at)
+  `);
 }

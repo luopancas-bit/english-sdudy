@@ -157,3 +157,22 @@ export const vocabularyEntries = sqliteTable(
     index("vocabulary_user_status_idx").on(table.userId, table.status, table.updatedAt),
   ],
 );
+
+export const vocabularyTrainingAttempts = sqliteTable(
+  "vocabulary_training_attempts",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    entryId: text("entry_id").notNull().references(() => vocabularyEntries.id, { onDelete: "cascade" }),
+    mode: text("mode", { enum: ["guided", "dictation"] }).notNull(),
+    firstTryCorrect: integer("first_try_correct", { mode: "boolean" }).notNull(),
+    correctionCount: integer("correction_count").notNull(),
+    durationMs: integer("duration_ms").notNull(),
+    device: text("device", { enum: ["desktop", "mobile"] }).notNull(),
+    occurredAt: text("occurred_at").notNull(),
+  },
+  (table) => [
+    index("vocabulary_training_user_idx").on(table.userId, table.occurredAt),
+    index("vocabulary_training_entry_idx").on(table.userId, table.entryId, table.occurredAt),
+  ],
+);

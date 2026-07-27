@@ -69,6 +69,15 @@ const vocabularyParamsSchema = z.object({
   entryId: z.string().uuid(),
 });
 
+const vocabularyTrainingSchema = z.object({
+  entryId: z.string().uuid(),
+  mode: z.enum(["guided", "dictation"]),
+  firstTryCorrect: z.boolean(),
+  correctionCount: z.number().int().min(0).max(1_000),
+  durationMs: z.number().int().min(100).max(3_600_000),
+  device: z.enum(["desktop", "mobile"]),
+});
+
 const COURSE_MAP_LESSON_COUNT = 3;
 
 export async function createApp(
@@ -525,8 +534,21 @@ export async function createApp(
     if (!user) return;
     const { entryId } = vocabularyParamsSchema.parse(request.params);
     const { status } = vocabularyStatusSchema.parse(request.body);
+    if (status === "mastered") {
+      return reply.code(409).send({ error: "单词必须通过正式考核才能标记为已掌握" });
+    }
     const entry = await repository.updateVocabularyStatus(user.id, entryId, status);
     return entry ? publicVocabularyEntry(entry) : reply.code(404).send({ error: "生词不存在" });
+  });
+
+  app.post("/api/vocabulary/training-attempts", async (request, reply) => {
+    const user = await requireUser(request, reply);
+    if (!user) return;
+    const body = vocabularyTrainingSchema.parse(request.body);
+    const attempt = await repository.saveVocabularyTrainingAttempt({ userId: user.id, ...body });
+    return attempt
+      ? reply.code(201).send({ attemptId: attempt.id, occurredAt: attempt.occurredAt })
+      : reply.code(404).send({ error: "训练词条不存在" });
   });
 
   app.get("/api/lessons/:lessonId/assessment", async (request, reply) => {
