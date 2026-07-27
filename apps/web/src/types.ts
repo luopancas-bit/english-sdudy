@@ -52,7 +52,17 @@ export interface Assessment {
     prompt: string;
     options?: string[];
     points: number;
+    audioUrl?: string;
+    audioStart?: number;
+    audioEnd?: number;
+    speechText?: string;
   }>;
+}
+
+export interface RecordingReceipt {
+  recordingId: string;
+  mimeType: string;
+  byteSize: number;
 }
 
 export interface LessonContent {

@@ -5,6 +5,7 @@ import {
   invitations,
   lessonMastery,
   reviewQueue,
+  recordings,
   sessions,
   users,
   vocabularyEntries,
@@ -110,6 +111,27 @@ export class LearningRepository {
 
   async saveAttempt(input: typeof attempts.$inferInsert) {
     await this.database.insert(attempts).values(input);
+  }
+
+  async createRecording(input: {
+    id: string;
+    userId: string;
+    lessonId: number;
+    questionId: string;
+    storagePath: string;
+    mimeType: string;
+    byteSize: number;
+  }) {
+    await this.database.insert(recordings).values({
+      ...input,
+      createdAt: new Date().toISOString(),
+    });
+  }
+
+  findRecording(userId: string, recordingId: string) {
+    return this.database.query.recordings.findFirst({
+      where: and(eq(recordings.id, recordingId), eq(recordings.userId, userId)),
+    });
   }
 
   async attemptsFor(userId: string, lessonId: number): Promise<AssessmentAttempt[]> {

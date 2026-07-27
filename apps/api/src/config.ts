@@ -6,6 +6,7 @@ const configSchema = z.object({
   PORT: z.coerce.number().int().positive().default(8787),
   DATABASE_URL: z.string().default("file:./data/english-study.sqlite"),
   CONTENT_DIR: z.string().default("./content-private"),
+  RECORDINGS_DIR: z.string().default("./recordings"),
   SESSION_COOKIE_NAME: z.string().default("zhuguang_session"),
   SESSION_TTL_DAYS: z.coerce.number().int().min(1).max(90).default(30),
   SESSION_SECRET: z.string().min(32),

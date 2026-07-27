@@ -46,7 +46,12 @@ const lessonSchema = z.object({
 export type Assessment = z.infer<typeof assessmentSchema>;
 export type Lesson = z.infer<typeof lessonSchema>;
 export type PublicAssessment = Omit<Assessment, "questions"> & {
-  questions: Array<Omit<Assessment["questions"][number], "answer" | "sourceSentence">>;
+  questions: Array<Omit<Assessment["questions"][number], "answer" | "sourceSentence"> & {
+    audioUrl?: string;
+    audioStart?: number;
+    audioEnd?: number;
+    speechText?: string;
+  }>;
 };
 export type PublicLesson = Omit<Lesson, "audio"> & {
   audio: { us: string | null; uk: string | null };
@@ -100,11 +105,55 @@ export class ContentModule {
 
   async publicAssessment(lessonId: number): Promise<PublicAssessment> {
     const assessment = await this.loadAssessment(lessonId);
+    const timings = await this.loadSentenceTimings(lessonId);
     return {
       lessonId: assessment.lessonId,
       title: assessment.title,
-      questions: assessment.questions.map(({ answer: _answer, sourceSentence: _source, ...question }) => question),
+      questions: assessment.questions.map(({ answer: _answer, sourceSentence, ...question }) => {
+        const timing = timings.get(sourceSentence);
+        return {
+          ...question,
+          ...(question.type === "speech" ? { speechText: sourceSentence } : {}),
+          ...(["listening", "writing"].includes(question.dimension)
+            ? {
+                audioUrl: `/api/lessons/${lessonId}/audio/us`,
+                ...(timing ? { audioStart: timing.start, audioEnd: timing.end } : {}),
+              }
+            : {}),
+        };
+      }),
     };
+  }
+
+  private async loadSentenceTimings(lessonId: number) {
+    const result = new Map<string, { start: number; end: number }>();
+    try {
+      const [lesson, raw] = await Promise.all([
+        this.loadLesson(lessonId),
+        fs.readFile(path.join(this.contentDirectory, "timings.json"), "utf8"),
+      ]);
+      const timingFile = z.object({
+        lessons: z.record(z.string(), z.object({
+          us: z.object({
+            sentences: z.array(z.object({
+              sentenceId: z.string(),
+              start: z.number().nonnegative(),
+              end: z.number().positive(),
+            })),
+          }).optional(),
+        })),
+      }).parse(JSON.parse(raw));
+      const byId = new Map(
+        timingFile.lessons[String(lessonId)]?.us?.sentences.map((item) => [item.sentenceId, item]) ?? [],
+      );
+      for (const sentence of lesson.sentences) {
+        const timing = byId.get(sentence.id);
+        if (timing) result.set(sentence.text, { start: timing.start, end: timing.end });
+      }
+    } catch {
+      return result;
+    }
+    return result;
   }
 
   grade(assessment: Assessment, submitted: Record<string, string>): {

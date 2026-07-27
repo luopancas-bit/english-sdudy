@@ -59,6 +59,7 @@ describe("learning account flow", () => {
       PORT: 8787,
       DATABASE_URL: databaseUrl,
       CONTENT_DIR: contentDirectory,
+      RECORDINGS_DIR: path.join(directory, "recordings"),
       SESSION_COOKIE_NAME: "test_session",
       SESSION_TTL_DAYS: 1,
       SESSION_SECRET: secret,
@@ -100,6 +101,23 @@ describe("learning account flow", () => {
     expect(practice.statusCode).toBe(201);
     expect(practice.json()).toMatchObject({ countsTowardMastery: false });
 
+    const publicAssessment = await app.inject({
+      method: "GET",
+      url: "/api/lessons/1/assessment",
+      headers: { cookie },
+    });
+    expect(publicAssessment.statusCode).toBe(200);
+    expect(publicAssessment.json().questions[0]).toMatchObject({
+      id: "l1",
+      audioUrl: "/api/lessons/1/audio/us",
+    });
+    expect(publicAssessment.json().questions[0]).not.toHaveProperty("answer");
+    expect(publicAssessment.json().questions[2]).toMatchObject({
+      id: "s1",
+      speechText: "Speak clearly.",
+    });
+    expect(publicAssessment.json().questions[2]).not.toHaveProperty("sourceSentence");
+
     const mapBeforeFormal = await app.inject({
       method: "GET",
       url: "/api/course-map",
@@ -115,7 +133,25 @@ describe("learning account flow", () => {
     const payload = {
       kind: "formal",
       answers: { l1: "A", r1: "B", s1: "speak clearly", w1: "computer" },
+      recordings: { s1: "" },
     };
+    const missingRecording = await app.inject({
+      method: "POST",
+      url: "/api/lessons/1/attempts",
+      headers: { cookie },
+      payload: { ...payload, recordings: {} },
+    });
+    expect(missingRecording.statusCode).toBe(400);
+    expect(missingRecording.json()).toMatchObject({ error: "正式考核的跟读题必须完成录音" });
+
+    const firstRecording = await app.inject({
+      method: "POST",
+      url: "/api/lessons/1/recordings/s1",
+      headers: { cookie, "content-type": "audio/webm" },
+      payload: Buffer.alloc(2_000, 1),
+    });
+    expect(firstRecording.statusCode).toBe(201);
+    payload.recordings.s1 = firstRecording.json().recordingId;
     const first = await app.inject({
       method: "POST",
       url: "/api/lessons/1/attempts",
@@ -154,6 +190,14 @@ describe("learning account flow", () => {
       payload: {
         kind: "formal",
         answers: { l1: "B", r1: "A", s1: "", w1: "wrong" },
+        recordings: {
+          s1: (await app.inject({
+            method: "POST",
+            url: "/api/lessons/2/recordings/s1",
+            headers: { cookie, "content-type": "audio/webm" },
+            payload: Buffer.alloc(2_000, 2),
+          })).json().recordingId,
+        },
       },
     });
     expect(weakAttempt.statusCode).toBe(201);

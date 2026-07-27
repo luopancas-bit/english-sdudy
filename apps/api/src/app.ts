@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import fs from "node:fs/promises";
 import path from "node:path";
 import cookie from "@fastify/cookie";
 import cors from "@fastify/cors";
@@ -38,6 +39,7 @@ const profileSchema = z.object({
 const submissionSchema = z.object({
   kind: z.enum(["formal", "practice", "review"]),
   answers: z.record(z.string(), z.string()),
+  recordings: z.record(z.string(), z.string().uuid()).default({}),
 });
 
 const vocabularySchema = z.object({
@@ -66,6 +68,11 @@ export async function createApp(
   await migrate(database);
   const repository = new LearningRepository(database);
   const content = new ContentModule(config.CONTENT_DIR);
+  app.addContentTypeParser(
+    ["audio/webm", "audio/mp4", "audio/ogg", "application/octet-stream"],
+    { parseAs: "buffer", bodyLimit: 10_000_000 },
+    (_request, body, done) => done(null, body),
+  );
   app.addHook("onClose", async () => {
     database.$client.close();
   });
@@ -492,12 +499,57 @@ export async function createApp(
     return reply.type("audio/mpeg").header("Cache-Control", "private, max-age=86400").send(audio);
   });
 
+  app.post("/api/lessons/:lessonId/recordings/:questionId", async (request, reply) => {
+    const user = await requireUser(request, reply);
+    if (!user) return;
+    const params = z.object({
+      lessonId: z.coerce.number().int().min(1).max(COURSE_MAP_LESSON_COUNT),
+      questionId: z.string().min(1).max(80).regex(/^[a-zA-Z0-9_-]+$/),
+    }).parse(request.params);
+    const assessment = await content.loadAssessment(params.lessonId);
+    const question = assessment.questions.find((item) => item.id === params.questionId);
+    if (!question || question.type !== "speech") {
+      return reply.code(400).send({ error: "该题不接受跟读录音" });
+    }
+    const audio = request.body;
+    if (!Buffer.isBuffer(audio) || audio.byteLength < 1_000) {
+      return reply.code(400).send({ error: "录音内容过短，请重新录制" });
+    }
+    const mimeType = request.headers["content-type"]?.split(";")[0] ?? "application/octet-stream";
+    const extension = mimeType === "audio/mp4" ? "m4a" : mimeType === "audio/ogg" ? "ogg" : "webm";
+    const recordingId = crypto.randomUUID();
+    const relativePath = path.join(user.id, String(params.lessonId).padStart(2, "0"), `${recordingId}.${extension}`);
+    const filename = path.join(config.RECORDINGS_DIR, relativePath);
+    await fs.mkdir(path.dirname(filename), { recursive: true });
+    await fs.writeFile(filename, audio, { flag: "wx" });
+    await repository.createRecording({
+      id: recordingId,
+      userId: user.id,
+      lessonId: params.lessonId,
+      questionId: params.questionId,
+      storagePath: relativePath,
+      mimeType,
+      byteSize: audio.byteLength,
+    });
+    return reply.code(201).send({ recordingId, mimeType, byteSize: audio.byteLength });
+  });
+
   app.post("/api/lessons/:lessonId/attempts", async (request, reply) => {
     const user = await requireUser(request, reply);
     if (!user) return;
     const lessonId = z.coerce.number().int().min(1).max(40).parse((request.params as { lessonId: string }).lessonId);
     const body = submissionSchema.parse(request.body);
     const assessment = await content.loadAssessment(lessonId);
+    const speechQuestions = assessment.questions.filter((question) => question.type === "speech");
+    if (body.kind !== "practice") {
+      for (const question of speechQuestions) {
+        const recordingId = body.recordings[question.id];
+        const recording = recordingId ? await repository.findRecording(user.id, recordingId) : null;
+        if (!recording || recording.lessonId !== lessonId || recording.questionId !== question.id) {
+          return reply.code(400).send({ error: "正式考核的跟读题必须完成录音" });
+        }
+      }
+    }
     const graded = content.grade(assessment, body.answers);
     const scores = scoreAssessment(graded.scored);
     const now = new Date();
@@ -509,7 +561,7 @@ export async function createApp(
       kind: body.kind,
       ...scores,
       total: scoreDimensions(scores),
-      answerDetail: { answers: graded.details },
+      answerDetail: { answers: graded.details, recordings: body.recordings },
       occurredAt: now.toISOString(),
     });
     const history = await repository.attemptsFor(user.id, lessonId);

@@ -69,6 +69,23 @@ export const attempts = sqliteTable(
   ],
 );
 
+export const recordings = sqliteTable(
+  "recordings",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    lessonId: integer("lesson_id").notNull(),
+    questionId: text("question_id").notNull(),
+    storagePath: text("storage_path").notNull(),
+    mimeType: text("mime_type").notNull(),
+    byteSize: integer("byte_size").notNull(),
+    createdAt: text("created_at").notNull(),
+  },
+  (table) => [
+    index("recordings_user_lesson_idx").on(table.userId, table.lessonId, table.createdAt),
+  ],
+);
+
 export const lessonMastery = sqliteTable(
   "lesson_mastery",
   {

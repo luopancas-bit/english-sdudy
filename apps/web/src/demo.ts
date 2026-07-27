@@ -53,6 +53,14 @@ export const demoAssessment: Assessment = {
       prompt: "用一句话概括本段的核心观点。",
       points: 1,
     },
+    {
+      id: "l8-speak-1",
+      dimension: "speaking",
+      type: "speech",
+      prompt: "朗读句子，保存录音并核对文本。",
+      speechText: "The computer helps me organize my work.",
+      points: 1,
+    },
   ],
 };
 

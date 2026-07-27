@@ -70,6 +70,22 @@ export async function migrate(database: Database): Promise<void> {
     )
   `);
   await database.run(sql`
+    CREATE TABLE IF NOT EXISTS recordings (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      lesson_id INTEGER NOT NULL,
+      question_id TEXT NOT NULL,
+      storage_path TEXT NOT NULL,
+      mime_type TEXT NOT NULL,
+      byte_size INTEGER NOT NULL,
+      created_at TEXT NOT NULL
+    )
+  `);
+  await database.run(sql`
+    CREATE INDEX IF NOT EXISTS recordings_user_lesson_idx
+    ON recordings(user_id, lesson_id, created_at)
+  `);
+  await database.run(sql`
     CREATE TABLE IF NOT EXISTS review_queue (
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       lesson_id INTEGER NOT NULL,

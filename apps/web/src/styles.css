@@ -301,7 +301,35 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .answer-options button > span { width: 30px; height: 30px; display: grid; place-items: center; border: 1px solid var(--line); }
 .answer-options button.selected { border-color: var(--forest); box-shadow: inset 4px 0 var(--forest); }
 .answer-options button svg { margin-left: auto; }
+.assessment-audio {
+  margin: 24px 0 0; padding: 18px; border: 1px solid var(--line); background: var(--paper);
+  display: grid; grid-template-columns: auto minmax(150px, 1fr) minmax(240px, .8fr); align-items: center; gap: 14px;
+}
+.assessment-audio > svg { color: var(--gold); }
+.assessment-audio > div { display: grid; gap: 3px; }
+.assessment-audio small { color: var(--muted); }
+.assessment-audio audio { width: 100%; height: 38px; }
 .question-sheet textarea { min-height: 180px; margin: 35px 0; border: 1px solid var(--line); padding: 18px; resize: vertical; }
+.speech-answer { display: grid; gap: 16px; margin: 26px 0; }
+.speech-answer blockquote {
+  margin: 0; padding: 20px 22px; border-left: 4px solid var(--gold); background: var(--gold-soft);
+  font: 500 18px/1.75 "Noto Serif SC", serif;
+}
+.speech-recorder {
+  min-height: 74px; padding: 14px; border: 1px solid var(--line);
+  display: grid; grid-template-columns: auto minmax(180px, 1fr) auto; align-items: center; gap: 14px;
+}
+.speech-recorder > button {
+  min-height: 42px; padding: 0 16px; border: 1px solid var(--forest); color: var(--forest); background: #fff;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer;
+}
+.speech-recorder > button.recording { color: #fff; border-color: #a84132; background: #a84132; }
+.speech-recorder audio { width: 100%; height: 36px; }
+.speech-recorder > span { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); font-size: 12px; }
+.speech-answer label { display: grid; gap: 8px; color: var(--muted); font-size: 13px; }
+.speech-answer textarea { margin: 0; }
+.speech-answer > p { margin: 0; display: flex; align-items: flex-start; gap: 7px; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.speech-answer > p svg { flex: 0 0 auto; margin-top: 2px; }
 .question-sheet footer { margin-top: auto; display: flex; align-items: center; justify-content: space-between; gap: 20px; border-top: 1px solid var(--line); padding-top: 24px; }
 .question-sheet footer > span { color: var(--muted); font-size: 13px; }
 .question-sheet footer button { padding: 0 24px; }
@@ -884,6 +912,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   .assessment-page > header div { display: none; }
   .question-sheet { margin-top: 28px; min-height: calc(100vh - 125px); padding: 28px 22px; box-shadow: none; }
   .question-sheet h1 { font-size: 28px; margin-top: 28px; }
+  .assessment-audio { grid-template-columns: auto 1fr; padding: 14px; }
+  .assessment-audio audio { grid-column: 1 / -1; }
+  .speech-recorder { grid-template-columns: 1fr; }
+  .speech-recorder > span { justify-content: center; }
   .question-sheet footer { align-items: stretch; flex-direction: column; }
   .question-sheet footer button { width: 100%; }
   .lesson-study-page { padding: 16px 14px 42px; }

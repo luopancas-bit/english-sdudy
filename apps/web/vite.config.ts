@@ -34,7 +34,7 @@ export default defineConfig({
             options: { cacheName: "assessments", expiration: { maxEntries: 40, maxAgeSeconds: 604800 } },
           },
           {
-            urlPattern: /\.(?:mp3|m4a|ogg)$/,
+            urlPattern: /(?:\.(?:mp3|m4a|ogg)$|\/api\/lessons\/\d+\/audio\/(?:us|uk))/,
             handler: "CacheFirst",
             options: { cacheName: "lesson-audio", expiration: { maxEntries: 80, maxAgeSeconds: 2592000 } },
           },

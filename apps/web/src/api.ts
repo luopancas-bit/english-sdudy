@@ -1,4 +1,4 @@
-import type { Assessment, AttemptResult, CourseMapData, DashboardData, LearningReportData, LessonContent, ReviewCenterData, User, VocabularyData, VocabularyEntry, VocabularyInput } from "./types";
+import type { Assessment, AttemptResult, CourseMapData, DashboardData, LearningReportData, LessonContent, RecordingReceipt, ReviewCenterData, User, VocabularyData, VocabularyEntry, VocabularyInput } from "./types";
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, {
@@ -54,9 +54,25 @@ export const api = {
   reviewCenter: () => request<ReviewCenterData>("/api/review-center"),
   lesson: (lessonId: number) => request<LessonContent>(`/api/lessons/${lessonId}`),
   assessment: (lessonId: number) => request<Assessment>(`/api/lessons/${lessonId}/assessment`),
-  submitAttempt: (lessonId: number, answers: Record<string, string>, kind: "formal" | "practice" | "review" = "formal") =>
+  uploadRecording: async (lessonId: number, questionId: string, blob: Blob) => {
+    const response = await fetch(`/api/lessons/${lessonId}/recordings/${encodeURIComponent(questionId)}`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": blob.type || "application/octet-stream" },
+      body: blob,
+    });
+    const body = (await response.json().catch(() => ({}))) as RecordingReceipt & { error?: string };
+    if (!response.ok) throw new Error(body.error || "录音上传失败");
+    return body;
+  },
+  submitAttempt: (
+    lessonId: number,
+    answers: Record<string, string>,
+    kind: "formal" | "practice" | "review" = "formal",
+    recordings: Record<string, string> = {},
+  ) =>
     request<AttemptResult>(`/api/lessons/${lessonId}/attempts`, {
       method: "POST",
-      body: JSON.stringify({ kind, answers }),
+      body: JSON.stringify({ kind, answers, recordings }),
     }),
 };
