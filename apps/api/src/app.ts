@@ -84,6 +84,16 @@ const wordMemoryTrainingSchema = vocabularyTrainingSchema.omit({ entryId: true }
   itemKey: z.string().trim().min(1).max(500),
 });
 
+const wordAssessmentSubmissionSchema = z.object({
+  answers: z.array(z.object({
+    term: z.string().trim().min(1).max(80),
+    meaning: z.string().max(200),
+    listening: z.string().max(80),
+    spelling: z.string().max(80),
+    context: z.string().max(80),
+  })).min(1).max(5),
+});
+
 const COURSE_MAP_LESSON_COUNT = 3;
 
 export async function createApp(
@@ -567,6 +577,58 @@ export async function createApp(
     const user = await requireUser(request, reply);
     if (!user) return;
     return repository.wordMemoryStats(user.id);
+  });
+
+  app.get("/api/word-memory/chapters/:lessonId/assessment", async (request, reply) => {
+    const user = await requireUser(request, reply);
+    if (!user) return;
+    const lessonId = z.coerce.number().int().min(1).max(40)
+      .parse((request.params as { lessonId: string }).lessonId);
+    const items = await content.wordAssessment(lessonId);
+    return {
+      lessonId,
+      passingScore: 80,
+      items: items.map(({ meaning, sentence, ...item }) => ({
+        ...item,
+        spellingPrompt: meaning,
+      })),
+    };
+  });
+
+  app.post("/api/word-memory/chapters/:lessonId/assessment", async (request, reply) => {
+    const user = await requireUser(request, reply);
+    if (!user) return;
+    const lessonId = z.coerce.number().int().min(1).max(40)
+      .parse((request.params as { lessonId: string }).lessonId);
+    const body = wordAssessmentSubmissionSchema.parse(request.body);
+    const items = await content.wordAssessment(lessonId);
+    const byTerm = new Map(items.map((item) => [normalizeVocabularyTerm(item.term), item]));
+    const submittedTerms = body.answers.map((answer) => normalizeVocabularyTerm(answer.term));
+    const seen = new Set(submittedTerms);
+    if (
+      body.answers.length !== items.length
+      || seen.size !== items.length
+      || submittedTerms.some((term) => !byTerm.has(term))
+    ) {
+      return reply.code(400).send({ error: "必须完成本组全部正式考核题目" });
+    }
+    const results = body.answers.map((answer) => {
+      const normalizedTerm = normalizeVocabularyTerm(answer.term);
+      const item = byTerm.get(normalizedTerm)!;
+      const meaning = answer.meaning === item.meaning ? 100 : 0;
+      const listening = normalizeVocabularyTerm(answer.listening) === normalizedTerm ? 100 : 0;
+      const spelling = normalizeVocabularyTerm(answer.spelling) === normalizedTerm ? 100 : 0;
+      const context = normalizeVocabularyTerm(answer.context) === normalizedTerm ? 100 : 0;
+      const total = meaning * 0.25 + listening * 0.25 + spelling * 0.3 + context * 0.2;
+      return { term: item.term, normalizedTerm, meaning, listening, spelling, context, total, passed: total >= 80 };
+    });
+    const saved = await repository.saveWordAssessmentResults({ userId: user.id, lessonId, results });
+    return reply.code(201).send({
+      attemptAt: saved.occurredAt,
+      passingScore: 80,
+      masteredCount: results.filter((item) => item.passed).length,
+      results: results.map(({ normalizedTerm: _normalizedTerm, ...result }) => result),
+    });
   });
 
   app.post("/api/word-memory/training-attempts", async (request, reply) => {

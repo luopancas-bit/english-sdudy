@@ -63,6 +63,17 @@ export type WordMemoryChapter = {
   vocabularyCount: number;
   sentenceCount: number;
 };
+export type WordAssessmentItem = {
+  term: string;
+  meaning: string;
+  meaningOptions: string[];
+  sentenceId: string;
+  sentence: string;
+  clozePrompt: string;
+  audioUrl: string;
+  audioStart?: number;
+  audioEnd?: number;
+};
 
 export class ContentModule {
   constructor(private readonly contentDirectory: string) {}
@@ -143,6 +154,38 @@ export class ContentModule {
     };
   }
 
+  async wordAssessment(lessonId: number): Promise<WordAssessmentItem[]> {
+    const lesson = await this.loadLesson(lessonId);
+    const timings = await this.loadSentenceTimings(lessonId);
+    const vocabulary = new Map(
+      lesson.vocabulary
+        .filter((item) => item.definition.trim())
+        .map((item) => [normalize(item.term), item]),
+    );
+    const eligible = lesson.sentences.flatMap((sentence) => {
+      const term = sentence.cloze ? vocabulary.get(normalize(sentence.cloze)) : undefined;
+      if (!term) return [];
+      const timing = timings.get(sentence.text);
+      const escaped = term.term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const clozePrompt = sentence.text.replace(new RegExp(escaped, "i"), "_____");
+      const alternatives = lesson.vocabulary
+        .filter((item) => item.definition.trim() && normalize(item.term) !== normalize(term.term))
+        .slice(0, 3)
+        .map((item) => item.definition);
+      return [{
+        term: term.term,
+        meaning: term.definition,
+        meaningOptions: rotateOptions([term.definition, ...alternatives], sentence.id),
+        sentenceId: sentence.id,
+        sentence: sentence.text,
+        clozePrompt,
+        audioUrl: `/api/lessons/${lessonId}/audio/us`,
+        ...(timing ? { audioStart: timing.start, audioEnd: timing.end } : {}),
+      }];
+    });
+    return eligible.slice(0, 5);
+  }
+
   private async loadSentenceTimings(lessonId: number) {
     const result = new Map<string, { start: number; end: number }>();
     try {
@@ -214,6 +257,12 @@ export class ContentModule {
       })),
     };
   }
+}
+
+function rotateOptions(options: string[], seed: string) {
+  if (!options.length) return options;
+  const offset = Array.from(seed).reduce((total, character) => total + character.charCodeAt(0), 0) % options.length;
+  return [...options.slice(offset), ...options.slice(0, offset)];
 }
 
 function normalize(value: string): string {

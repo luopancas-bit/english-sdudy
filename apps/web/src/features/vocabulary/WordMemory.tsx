@@ -9,6 +9,7 @@ import {
   LibraryBig,
   MessageSquareText,
   Play,
+  ShieldCheck,
 } from "lucide-react";
 import { api } from "../../api";
 import { demoLesson } from "../../demo";
@@ -21,6 +22,7 @@ import type {
 } from "../../types";
 import { QwertyTraining } from "./QwertyTraining";
 import { ChapterWordStudy, type ChapterStudyCard } from "./ChapterWordStudy";
+import { WordAssessmentView } from "./WordAssessmentView";
 
 const demoChapters: WordMemoryChapter[] = [
   { lessonId: 8, titleEn: "Computer", titleZh: "电脑", vocabularyCount: 3, sentenceCount: 3 },
@@ -36,6 +38,7 @@ export function WordMemory({ demo }: { demo: boolean }) {
   const [includeSentences, setIncludeSentences] = useState(false);
   const [training, setTraining] = useState<TypingTrainingEntry[] | null>(null);
   const [studying, setStudying] = useState(false);
+  const [assessing, setAssessing] = useState(false);
   const [stats, setStats] = useState<WordMemoryStats | null>(null);
   const [preparing, setPreparing] = useState(false);
   const [error, setError] = useState("");
@@ -47,8 +50,8 @@ export function WordMemory({ demo }: { demo: boolean }) {
       : api.wordMemoryChapters();
     const statsPromise = demo
       ? Promise.resolve<WordMemoryStats>({
-          summary: { attempts: 12, practicedItems: 7, firstTryAccuracy: 75, corrections: 4 },
-          lessons: [{ lessonId: 8, attempts: 12, practicedItems: 7, firstTryAccuracy: 75, corrections: 4, lastPracticedAt: new Date().toISOString() }],
+          summary: { attempts: 12, practicedItems: 7, firstTryAccuracy: 75, corrections: 4, formalAttempts: 4, masteredWords: 2 },
+          lessons: [{ lessonId: 8, attempts: 12, practicedItems: 7, firstTryAccuracy: 75, corrections: 4, lastPracticedAt: new Date().toISOString(), formalAttempts: 4, masteredWords: 2 }],
         })
       : api.wordMemoryStats();
     Promise.all([chaptersPromise, statsPromise]).then(([{ chapters: loaded }, loadedStats]) => {
@@ -196,6 +199,20 @@ export function WordMemory({ demo }: { demo: boolean }) {
     );
   }
 
+  if (assessing && lesson) {
+    return (
+      <WordAssessmentView
+        lessonId={lesson.id}
+        chapterLabel={`第 ${String(lesson.id).padStart(2, "0")} 章 · ${lesson.titleZh}`}
+        demo={demo}
+        onClose={() => setAssessing(false)}
+        onSaved={() => {
+          if (!demo) void api.wordMemoryStats().then(setStats);
+        }}
+      />
+    );
+  }
+
   if (error && !chapters.length) {
     return <section className="vocabulary-state error"><AlertCircle size={42} /><h2>暂时无法打开单词记忆</h2><p>{error}</p></section>;
   }
@@ -211,6 +228,7 @@ export function WordMemory({ demo }: { demo: boolean }) {
         <div className="word-memory-facts">
           <span><strong>{stats?.summary.practicedItems ?? 0}</strong> 项练习过</span>
           <span><strong>{stats?.summary.firstTryAccuracy ?? 0}%</strong> 首次正确</span>
+          <span><strong>{stats?.summary.masteredWords ?? 0}</strong> 词已达标</span>
           <em><Check size={15} />无达标门槛</em>
         </div>
       </div>
@@ -244,6 +262,9 @@ export function WordMemory({ demo }: { demo: boolean }) {
                   <button disabled={!lesson.vocabulary.length} onClick={() => setStudying(true)}>
                     <Play size={18} />学习本章
                   </button>
+                  <button className="assessment-button" disabled={!lesson.vocabulary.length} onClick={() => setAssessing(true)}>
+                    <ShieldCheck size={18} />正式考核
+                  </button>
                   <button className="primary-button" disabled={!selectedCount || preparing} onClick={() => void prepareTraining()}>
                     <Keyboard size={18} />{preparing ? "正在准备…" : `训练整章所选 ${selectedCount} 项`}
                   </button>
@@ -263,6 +284,8 @@ export function WordMemory({ demo }: { demo: boolean }) {
                 <span><small>练习内容</small><strong>{selectedStats?.practicedItems ?? 0} 项</strong></span>
                 <span><small>首次正确率</small><strong>{selectedStats?.firstTryAccuracy ?? 0}%</strong></span>
                 <span><small>累计纠错</small><strong>{selectedStats?.corrections ?? 0} 次</strong></span>
+                <span><small>正式考核</small><strong>{selectedStats?.formalAttempts ?? 0} 词次</strong></span>
+                <span><small>达到 80 分</small><strong>{selectedStats?.masteredWords ?? 0} 词</strong></span>
                 <p>这些数字只帮助你判断复习重点，不影响任何章节的进入和学习。</p>
               </div>
               {!selectedCount ? <p className="scope-note">请选择单词、短句，或同时选择两种训练内容。</p> : null}

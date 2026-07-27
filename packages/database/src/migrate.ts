@@ -174,4 +174,28 @@ export async function migrate(database: Database): Promise<void> {
     CREATE INDEX IF NOT EXISTS word_memory_training_lesson_idx
     ON word_memory_training_attempts(user_id, lesson_id, occurred_at)
   `);
+  await database.run(sql`
+    CREATE TABLE IF NOT EXISTS word_assessment_results (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      lesson_id INTEGER NOT NULL,
+      term TEXT NOT NULL,
+      normalized_term TEXT NOT NULL,
+      meaning REAL NOT NULL,
+      listening REAL NOT NULL,
+      spelling REAL NOT NULL,
+      context REAL NOT NULL,
+      total REAL NOT NULL,
+      passed INTEGER NOT NULL,
+      occurred_at TEXT NOT NULL
+    )
+  `);
+  await database.run(sql`
+    CREATE INDEX IF NOT EXISTS word_assessment_user_idx
+    ON word_assessment_results(user_id, occurred_at)
+  `);
+  await database.run(sql`
+    CREATE INDEX IF NOT EXISTS word_assessment_term_idx
+    ON word_assessment_results(user_id, lesson_id, normalized_term, occurred_at)
+  `);
 }

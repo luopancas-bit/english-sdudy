@@ -51,7 +51,7 @@ describe("learning account flow", () => {
         chineseText: "一节合成课程。",
         audio: { us: null, uk: null },
         vocabulary: [{ term: "synthetic", definition: "合成的" }],
-        sentences: [{ id: `${lessonId}-1`, text: "A synthetic lesson." }],
+        sentences: [{ id: `${lessonId}-1`, text: "A synthetic lesson.", cloze: "synthetic" }],
       }))),
     );
 
@@ -458,6 +458,50 @@ describe("learning account flow", () => {
     });
     expect(wordTraining.statusCode).toBe(201);
 
+    const wordAssessment = await app.inject({
+      method: "GET",
+      url: "/api/word-memory/chapters/1/assessment",
+      headers: { cookie },
+    });
+    expect(wordAssessment.statusCode).toBe(200);
+    expect(wordAssessment.json()).toMatchObject({
+      passingScore: 80,
+      items: [{
+        term: "synthetic",
+        spellingPrompt: "合成的",
+        clozePrompt: "A _____ lesson.",
+      }],
+    });
+    expect(wordAssessment.json().items[0]).not.toHaveProperty("meaning");
+
+    const formalWordAssessment = await app.inject({
+      method: "POST",
+      url: "/api/word-memory/chapters/1/assessment",
+      headers: { cookie },
+      payload: {
+        answers: [{
+          term: "synthetic",
+          meaning: "合成的",
+          listening: "synthetic",
+          spelling: "synthetic",
+          context: "synthetic",
+        }],
+      },
+    });
+    expect(formalWordAssessment.statusCode).toBe(201);
+    expect(formalWordAssessment.json()).toMatchObject({
+      masteredCount: 1,
+      results: [{
+        term: "synthetic",
+        meaning: 100,
+        listening: 100,
+        spelling: 100,
+        context: 100,
+        total: 100,
+        passed: true,
+      }],
+    });
+
     const wordMemoryStats = await app.inject({
       method: "GET",
       url: "/api/word-memory/stats",
@@ -465,8 +509,8 @@ describe("learning account flow", () => {
     });
     expect(wordMemoryStats.statusCode).toBe(200);
     expect(wordMemoryStats.json()).toMatchObject({
-      summary: { attempts: 2, practicedItems: 2, firstTryAccuracy: 50, corrections: 1 },
-      lessons: [{ lessonId: 1, attempts: 2, practicedItems: 2, firstTryAccuracy: 50, corrections: 1 }],
+      summary: { attempts: 2, practicedItems: 2, firstTryAccuracy: 50, corrections: 1, formalAttempts: 1, masteredWords: 1 },
+      lessons: [{ lessonId: 1, attempts: 2, practicedItems: 2, firstTryAccuracy: 50, corrections: 1, formalAttempts: 1, masteredWords: 1 }],
     });
 
     await app.close();

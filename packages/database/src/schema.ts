@@ -197,3 +197,25 @@ export const wordMemoryTrainingAttempts = sqliteTable(
     index("word_memory_training_lesson_idx").on(table.userId, table.lessonId, table.occurredAt),
   ],
 );
+
+export const wordAssessmentResults = sqliteTable(
+  "word_assessment_results",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    lessonId: integer("lesson_id").notNull(),
+    term: text("term").notNull(),
+    normalizedTerm: text("normalized_term").notNull(),
+    meaning: real("meaning").notNull(),
+    listening: real("listening").notNull(),
+    spelling: real("spelling").notNull(),
+    context: real("context").notNull(),
+    total: real("total").notNull(),
+    passed: integer("passed", { mode: "boolean" }).notNull(),
+    occurredAt: text("occurred_at").notNull(),
+  },
+  (table) => [
+    index("word_assessment_user_idx").on(table.userId, table.occurredAt),
+    index("word_assessment_term_idx").on(table.userId, table.lessonId, table.normalizedTerm, table.occurredAt),
+  ],
+);

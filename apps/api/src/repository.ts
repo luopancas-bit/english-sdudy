@@ -10,6 +10,7 @@ import {
   users,
   vocabularyEntries,
   vocabularyTrainingAttempts,
+  wordAssessmentResults,
   wordMemoryTrainingAttempts,
   wrongAnswers,
   type Database,
@@ -380,10 +381,16 @@ export class LearningRepository {
   }
 
   async wordMemoryStats(userId: string) {
-    const attempts = await this.database.query.wordMemoryTrainingAttempts.findMany({
-      where: eq(wordMemoryTrainingAttempts.userId, userId),
-      orderBy: [desc(wordMemoryTrainingAttempts.occurredAt)],
-    });
+    const [attempts, assessments] = await Promise.all([
+      this.database.query.wordMemoryTrainingAttempts.findMany({
+        where: eq(wordMemoryTrainingAttempts.userId, userId),
+        orderBy: [desc(wordMemoryTrainingAttempts.occurredAt)],
+      }),
+      this.database.query.wordAssessmentResults.findMany({
+        where: eq(wordAssessmentResults.userId, userId),
+        orderBy: [desc(wordAssessmentResults.occurredAt)],
+      }),
+    ]);
     const byLesson = new Map<number, {
       attempts: number;
       firstTryCorrect: number;
@@ -417,6 +424,8 @@ export class LearningRepository {
         practicedItems: practicedItems.size,
         firstTryAccuracy: attempts.length ? Math.round((firstTryCorrect / attempts.length) * 100) : 0,
         corrections,
+        formalAttempts: assessments.length,
+        masteredWords: latestPassedWords(assessments).size,
       },
       lessons: Array.from(byLesson, ([lessonId, value]) => ({
         lessonId,
@@ -425,8 +434,36 @@ export class LearningRepository {
         firstTryAccuracy: Math.round((value.firstTryCorrect / value.attempts) * 100),
         corrections: value.corrections,
         lastPracticedAt: value.lastPracticedAt,
+        formalAttempts: assessments.filter((item) => item.lessonId === lessonId).length,
+        masteredWords: latestPassedWords(assessments.filter((item) => item.lessonId === lessonId)).size,
       })),
     };
+  }
+
+  async saveWordAssessmentResults(input: {
+    userId: string;
+    lessonId: number;
+    results: Array<{
+      term: string;
+      normalizedTerm: string;
+      meaning: number;
+      listening: number;
+      spelling: number;
+      context: number;
+      total: number;
+      passed: boolean;
+    }>;
+  }) {
+    const occurredAt = new Date().toISOString();
+    const rows = input.results.map((result) => ({
+      id: crypto.randomUUID(),
+      userId: input.userId,
+      lessonId: input.lessonId,
+      occurredAt,
+      ...result,
+    }));
+    if (rows.length) await this.database.insert(wordAssessmentResults).values(rows);
+    return { occurredAt, rows };
   }
 
   async dashboard(userId: string, now: string) {
@@ -475,4 +512,12 @@ export class LearningRepository {
     ]);
     return { attempts: attemptRows, mastery };
   }
+}
+
+function latestPassedWords(rows: Array<{ normalizedTerm: string; passed: boolean }>) {
+  const latest = new Map<string, boolean>();
+  for (const row of rows) {
+    if (!latest.has(row.normalizedTerm)) latest.set(row.normalizedTerm, row.passed);
+  }
+  return new Set(Array.from(latest).filter(([, passed]) => passed).map(([term]) => term));
 }

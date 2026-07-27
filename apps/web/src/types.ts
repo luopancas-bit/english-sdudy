@@ -229,6 +229,8 @@ export interface WordMemoryStats {
     practicedItems: number;
     firstTryAccuracy: number;
     corrections: number;
+    formalAttempts: number;
+    masteredWords: number;
   };
   lessons: Array<{
     lessonId: number;
@@ -237,6 +239,38 @@ export interface WordMemoryStats {
     firstTryAccuracy: number;
     corrections: number;
     lastPracticedAt: string;
+    formalAttempts: number;
+    masteredWords: number;
+  }>;
+}
+
+export interface WordAssessment {
+  lessonId: number;
+  passingScore: number;
+  items: Array<{
+    term: string;
+    meaningOptions: string[];
+    sentenceId: string;
+    clozePrompt: string;
+    spellingPrompt: string;
+    audioUrl: string;
+    audioStart?: number;
+    audioEnd?: number;
+  }>;
+}
+
+export interface WordAssessmentResult {
+  attemptAt: string;
+  passingScore: number;
+  masteredCount: number;
+  results: Array<{
+    term: string;
+    meaning: number;
+    listening: number;
+    spelling: number;
+    context: number;
+    total: number;
+    passed: boolean;
   }>;
 }
 
