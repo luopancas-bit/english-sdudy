@@ -25,6 +25,8 @@ for (const filename of files) {
 }
 
 await fs.mkdir(path.join(libraryRoot, accent), { recursive: true });
+await fs.chmod(libraryRoot, 0o755);
+await fs.chmod(path.join(libraryRoot, accent), 0o755);
 let library = { version: 1, entries: {} };
 try {
   library = JSON.parse(await fs.readFile(path.join(libraryRoot, "index.json"), "utf8"));
@@ -48,6 +50,7 @@ for (const [key, term] of terms) {
             const extension = desired.audio.includes(".ogg") ? "ogg" : "mp3";
             const relativePath = `${accent}/${base}.${extension}`;
             await fs.writeFile(path.join(libraryRoot, relativePath), Buffer.from(await audioResponse.arrayBuffer()));
+            await fs.chmod(path.join(libraryRoot, relativePath), 0o644);
             asset = {
               path: relativePath,
               mimeType: mimeFromUrl(desired.audio),
@@ -66,6 +69,7 @@ for (const [key, term] of terms) {
     const voice = accent === "uk" ? "Daniel" : "Samantha";
     await run("say", ["-v", voice, "-o", temporary, "--", term]);
     await run("afconvert", ["-f", "m4af", "-d", "aac", temporary, path.join(libraryRoot, relativePath)]);
+    await fs.chmod(path.join(libraryRoot, relativePath), 0o644);
     await fs.unlink(temporary);
     asset = {
       path: relativePath,
@@ -81,4 +85,5 @@ for (const [key, term] of terms) {
 }
 
 await fs.writeFile(path.join(libraryRoot, "index.json"), `${JSON.stringify(library, null, 2)}\n`);
+await fs.chmod(path.join(libraryRoot, "index.json"), 0o644);
 console.log(`Imported ${terms.size} listening terms into ${path.join(libraryRoot, "index.json")}`);
