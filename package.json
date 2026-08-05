@@ -11,6 +11,7 @@
     "test:unit": "pnpm --filter @zhuguang/domain test",
     "test:e2e": "playwright test",
     "db:bootstrap": "pnpm --filter @zhuguang/api db:bootstrap",
+    "audio:import": "node scripts/import-vocabulary-audio.mjs",
     "check": "pnpm typecheck && pnpm test && pnpm build"
   },
   "devDependencies": {

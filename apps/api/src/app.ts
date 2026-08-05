@@ -671,6 +671,19 @@ export async function createApp(
     return reply.type("audio/mpeg").header("Cache-Control", "private, max-age=86400").send(audio);
   });
 
+  app.get("/api/lessons/:lessonId/assessment-audio/:questionId/:accent", async (request, reply) => {
+    const user = await requireUser(request, reply);
+    if (!user) return;
+    const params = z.object({
+      lessonId: z.coerce.number().int().min(1).max(COURSE_MAP_LESSON_COUNT),
+      questionId: z.string().min(1).max(80).regex(/^[a-zA-Z0-9_-]+$/),
+      accent: z.enum(["us", "uk"]),
+    }).parse(request.params);
+    const audio = await content.assessmentWordAudio(params.lessonId, params.questionId, params.accent);
+    if (!audio) return reply.code(404).send({ error: "本题单词音频尚未部署" });
+    return reply.type(audio.mimeType).header("Cache-Control", "private, max-age=86400").send(audio.data);
+  });
+
   app.post("/api/lessons/:lessonId/recordings/:questionId", async (request, reply) => {
     const user = await requireUser(request, reply);
     if (!user) return;

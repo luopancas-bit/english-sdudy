@@ -28,6 +28,12 @@ describe("learning account flow", () => {
     temporaryDirectories.push(directory);
     const contentDirectory = path.join(directory, "content");
     await fs.mkdir(path.join(contentDirectory, "assessments"), { recursive: true });
+    await fs.mkdir(path.join(contentDirectory, "audio", "vocabulary", "us"), { recursive: true });
+    await fs.writeFile(path.join(contentDirectory, "audio", "vocabulary", "us", "a.m4a"), "word-audio");
+    await fs.writeFile(path.join(contentDirectory, "audio", "vocabulary", "index.json"), JSON.stringify({
+      version: 1,
+      entries: { a: { term: "A", accents: { us: { path: "us/a.m4a", mimeType: "audio/mp4" } } } },
+    }));
     await fs.writeFile(
       path.join(contentDirectory, "assessments", "lesson-01.json"),
       JSON.stringify(syntheticAssessment()),
@@ -189,14 +195,26 @@ describe("learning account flow", () => {
     expect(publicAssessment.statusCode).toBe(200);
     expect(publicAssessment.json().questions[0]).toMatchObject({
       id: "l1",
-      audioUrl: "/api/lessons/1/audio/us",
+      audioUrl: "/api/lessons/1/assessment-audio/l1/us",
+      audioMode: "word",
     });
+    expect(publicAssessment.json().questions[0]).not.toHaveProperty("audioStart");
+    expect(publicAssessment.json().questions[0]).not.toHaveProperty("audioEnd");
     expect(publicAssessment.json().questions[0]).not.toHaveProperty("answer");
     expect(publicAssessment.json().questions[2]).toMatchObject({
       id: "s1",
       speechText: "Speak clearly.",
     });
     expect(publicAssessment.json().questions[2]).not.toHaveProperty("sourceSentence");
+
+    const listeningWordAudio = await app.inject({
+      method: "GET",
+      url: "/api/lessons/1/assessment-audio/l1/us",
+      headers: { cookie },
+    });
+    expect(listeningWordAudio.statusCode).toBe(200);
+    expect(listeningWordAudio.headers["content-type"]).toContain("audio/mp4");
+    expect(listeningWordAudio.body).toBe("word-audio");
 
     const mapBeforeFormal = await app.inject({
       method: "GET",

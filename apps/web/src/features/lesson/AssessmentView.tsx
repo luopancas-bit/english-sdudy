@@ -91,7 +91,7 @@ export function AssessmentView({
         <div className="question-kind"><Icon size={22} /><span>{dimensionNames[question.dimension]}考核</span></div>
         <h1>{question.prompt}</h1>
         <p>{kind === "review" ? "完成整组复习后统一显示结果，本题不会即时透露答案。" : "正式考核完成整组后统一显示结果，本题不会即时透露答案。"}</p>
-        {question.audioUrl && <QuestionAudio url={question.audioUrl} start={question.audioStart} end={question.audioEnd} />}
+        {question.audioUrl && <QuestionAudio url={question.audioUrl} mode={question.audioMode} start={question.audioStart} end={question.audioEnd} />}
         {question.options ? (
           <div className="answer-options">
             {question.options.map((option, optionIndex) => (
@@ -125,13 +125,13 @@ export function AssessmentView({
   );
 }
 
-function QuestionAudio({ url, start, end }: { url: string; start?: number | undefined; end?: number | undefined }) {
+function QuestionAudio({ url, mode, start, end }: { url: string; mode?: "word" | "sentence" | undefined; start?: number | undefined; end?: number | undefined }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const clipUrl = start === undefined ? url : `${url}#t=${start},${end ?? ""}`;
   return (
     <div className="assessment-audio">
       <Headphones size={20} />
-      <div><strong>考核音频</strong><small>{start === undefined ? "播放本课音频后作答。" : "本题只播放对应句子，可重复核对。"}</small></div>
+      <div><strong>考核音频</strong><small>{mode === "word" ? "本题只播放一个目标单词或短语，可重复核对。" : start === undefined ? "播放本课音频后作答。" : "本题只播放对应句子，可重复核对。"}</small></div>
       <audio
         ref={audioRef}
         controls

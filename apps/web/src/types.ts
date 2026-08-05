@@ -64,6 +64,7 @@ export interface Assessment {
     audioUrl?: string;
     audioStart?: number;
     audioEnd?: number;
+    audioMode?: "word" | "sentence";
     speechText?: string;
   }>;
 }

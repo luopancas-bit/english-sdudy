@@ -20,6 +20,17 @@ const assessmentSchema = z.object({
   questions: z.array(questionSchema).min(4),
 });
 
+const vocabularyAudioSchema = z.object({
+  version: z.literal(1),
+  entries: z.record(z.string(), z.object({
+    term: z.string().min(1),
+    accents: z.object({
+      us: z.object({ path: z.string().min(1), mimeType: z.string().min(1) }).optional(),
+      uk: z.object({ path: z.string().min(1), mimeType: z.string().min(1) }).optional(),
+    }),
+  })),
+});
+
 const lessonSchema = z.object({
   id: z.number().int().min(1).max(40),
   slug: z.string().min(1),
@@ -50,6 +61,7 @@ export type PublicAssessment = Omit<Assessment, "questions"> & {
     audioUrl?: string;
     audioStart?: number;
     audioEnd?: number;
+    audioMode?: "word" | "sentence";
     speechText?: string;
   }>;
 };
@@ -132,6 +144,25 @@ export class ContentModule {
     }
   }
 
+  async assessmentWordAudio(lessonId: number, questionId: string, accent: "us" | "uk") {
+    const assessment = await this.loadAssessment(lessonId);
+    const question = assessment.questions.find((item) => item.id === questionId);
+    if (!question || question.dimension !== "listening") return null;
+    try {
+      const raw = await fs.readFile(path.join(this.contentDirectory, "audio", "vocabulary", "index.json"), "utf8");
+      const library = vocabularyAudioSchema.parse(JSON.parse(raw));
+      const asset = library.entries[normalize(question.answer)]?.accents[accent];
+      if (!asset) return null;
+      const audioRoot = path.resolve(this.contentDirectory, "audio", "vocabulary");
+      const filename = path.resolve(audioRoot, asset.path);
+      if (!filename.startsWith(`${audioRoot}${path.sep}`)) return null;
+      return { data: await fs.readFile(filename), mimeType: asset.mimeType };
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+      throw error;
+    }
+  }
+
   async publicAssessment(lessonId: number): Promise<PublicAssessment> {
     const assessment = await this.loadAssessment(lessonId);
     const timings = await this.loadSentenceTimings(lessonId);
@@ -143,9 +174,15 @@ export class ContentModule {
         return {
           ...question,
           ...(question.type === "speech" ? { speechText: sourceSentence } : {}),
-          ...(["listening", "writing"].includes(question.dimension)
+          ...(question.dimension === "listening"
             ? {
+                audioUrl: `/api/lessons/${lessonId}/assessment-audio/${encodeURIComponent(question.id)}/us`,
+                audioMode: "word" as const,
+              }
+            : question.dimension === "writing"
+              ? {
                 audioUrl: `/api/lessons/${lessonId}/audio/us`,
+                audioMode: "sentence" as const,
                 ...(timing ? { audioStart: timing.start, audioEnd: timing.end } : {}),
               }
             : {}),
