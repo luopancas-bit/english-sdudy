@@ -86,7 +86,7 @@ export function ReviewCenter({
         <section className="review-queue">
           <div className="review-section-heading">
             <div>
-              <span>REVIEW QUEUE</span>
+              <span>复习队列</span>
               <h2>到期复习</h2>
             </div>
             <small>只有计划复习和正式考核会更新掌握度</small>
@@ -127,7 +127,7 @@ export function ReviewCenter({
         <section className="wrong-answer-section">
           <div className="review-section-heading">
             <div>
-              <span>WEAK POINTS</span>
+              <span>薄弱项</span>
               <h2>最近错题</h2>
             </div>
             <small>优先处理重复出错的题目</small>

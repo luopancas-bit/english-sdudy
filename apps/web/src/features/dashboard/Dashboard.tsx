@@ -13,6 +13,7 @@ import {
   Settings,
   Sparkles,
   Target,
+  UserRound,
 } from "lucide-react";
 import type { DashboardData } from "../../types";
 import { CourseMap } from "../map/CourseMap";
@@ -58,6 +59,11 @@ export function Dashboard({
         lessonId={assessmentSession.lessonId}
         kind={assessmentSession.kind}
         demo={demo}
+        onReview={() => {
+          setAssessmentSession(null);
+          setActive("review");
+          void onRefresh();
+        }}
         onClose={() => {
           setAssessmentSession(null);
           void onRefresh();
@@ -102,8 +108,10 @@ export function Dashboard({
       <main className="dashboard">
         <header className="topbar">
           <div>
-            <h1>{active === "today" ? "下午好，今天先巩固，再向前一步" : active === "settings" ? "个人设置" : navItems.find(([id]) => id === active)?.[1]}</h1>
-            <p>{active === "today" ? "依据遗忘曲线与掌握情况，为你生成个性化学习计划。" : active === "settings" ? "管理你的昵称、学习目标和发音偏好。" : active === "map" ? "依次完成正式考核，解锁下一课；复习到期时优先巩固。" : active === "review" ? "按到期时间巩固记忆，并集中处理反复出错的内容。" : active === "word-memory" ? "按词典章节优先学习单词，可选短句；统计只反馈，不限制学习进度。" : active === "vocabulary" ? "保存个人生词；“训练这一组”继续完成键入、纠错和记录闭环。" : "从学习频率、四维能力和逐课掌握度检查真实进步。"}</p>
+            {active === "today" && <span className="mobile-brand"><img src="/brand-mark.svg" alt="" />逐光英语</span>}
+            <h1>{active === "today" ? <><span className="desktop-title">下午好，今天先巩固，再向前一步</span><span className="mobile-title">今天先巩固，再向前一步</span></> : active === "settings" ? "个人设置" : navItems.find(([id]) => id === active)?.[1]}</h1>
+            <p>{active === "today" ? "依据遗忘曲线与掌握情况，为你生成个性化学习计划。" : active === "settings" ? "管理你的昵称、学习目标和发音偏好。" : active === "map" ? "正式考核记录真实掌握度；未达标也可以继续学习下一课。" : active === "review" ? "按到期时间巩固记忆，并集中处理反复出错的内容。" : active === "word-memory" ? "按词典章节优先学习单词，可选短句；统计只反馈，不限制学习进度。" : active === "vocabulary" ? "保存个人生词；“训练这一组”继续完成键入、纠错和记录闭环。" : "从学习频率、四维能力和逐课掌握度检查真实进步。"}</p>
+            {active === "today" && <small className="mobile-streak">连续学习第 {data.studyStreak} 天</small>}
           </div>
           <div className="top-actions"><button aria-label="提醒"><Bell size={20} /></button><button aria-label="设置" onClick={() => setActive("settings")}><Settings size={20} /></button></div>
         </header>
@@ -119,24 +127,27 @@ export function Dashboard({
           <div className="dashboard-grid">
             <section className="today-column">
               <button className="current-lesson" onClick={() => setStudyLessonId(data.currentLesson)}>
-                <BookOpen size={34} strokeWidth={1.6} />
+                <span className="current-lesson-icon"><BookOpen size={27} strokeWidth={1.7} /></span>
                 <span><small>当前学习</small><strong>第 {String(data.currentLesson).padStart(2, "0")} 课　{data.currentLessonTitle}</strong></span>
-                <ChevronRight />
+                <b>继续本课</b><ChevronRight />
               </button>
 
               <h2>今日学习计划</h2>
               <div className="learning-path">
-                <svg viewBox="0 0 760 190" preserveAspectRatio="none" aria-hidden="true">
-                  <path className="path-shadow" d="M45 150 C210 110 340 132 430 90 S600 82 715 24" />
-                  <path className="path-line" d="M45 145 C210 105 340 127 430 85 S600 77 715 19" />
-                </svg>
-                <PlanStop icon={<Clock3 />} title="到期复习" duration={`${data.plan.reviewMinutes} 分钟`} note={`${data.dueReviews} 项复习到期`} x="7%" y="61%" />
-                <PlanStop icon={<Target />} title="薄弱项" duration={`${data.plan.weakMinutes} 分钟`} note={`${data.weakItems} 个错题待巩固`} x="39%" y="42%" tone="gold" />
-                <PlanStop icon={<BookOpen />} title="新课学习" duration={`${data.plan.newLessonMinutes} 分钟`} note="学习新知，向前一步" x="68%" y="21%" />
-                <button className="start-orb" onClick={() => setStudyLessonId(data.currentLesson)}>
-                  <img src="/brand-mark.svg" alt="" /><span>开始今日学习</span><small>预计用时 {data.plan.reviewMinutes + data.plan.weakMinutes + data.plan.newLessonMinutes} 分钟</small>
-                </button>
+                <div className="learning-plan-list">
+                  <PlanStop index={1} icon={<Clock3 />} title="到期复习" duration={`${data.plan.reviewMinutes} 分钟`} note={`${data.dueReviews} 项复习到期`} onClick={() => setActive("review")} />
+                  <PlanStop index={2} icon={<Target />} title="薄弱项" duration={`${data.plan.weakMinutes} 分钟`} note={`${data.weakItems} 个错题待巩固`} tone="gold" onClick={() => setActive("review")} />
+                  <PlanStop index={3} icon={<BookOpen />} title="新课学习" duration={`${data.plan.newLessonMinutes} 分钟`} note="学习新知，向前一步" onClick={() => setStudyLessonId(data.currentLesson)} />
+                </div>
+                <div className="start-learning-row">
+                  <button className="start-learning-button" onClick={() => setStudyLessonId(data.currentLesson)}><BookOpen size={20} />开始今日学习</button>
+                  <small>预计用时 {data.plan.reviewMinutes + data.plan.weakMinutes + data.plan.newLessonMinutes} 分钟</small>
+                </div>
               </div>
+
+              <button className="mobile-word-entry" onClick={() => setActive("word-memory")}>
+                <span><LibraryBig size={23} /></span><span><strong>单词记忆</strong><small>按章节学习并训练这一组</small></span><ChevronRight size={20} />
+              </button>
 
               <section className="history">
                 <div className="section-heading"><h2>最近学习记录</h2><button onClick={() => setActive("report")}>查看全部</button></div>
@@ -198,6 +209,12 @@ export function Dashboard({
           <section className="module-placeholder"><BookOpen size={48} /><h2>{navItems.find(([id]) => id === active)?.[1]}</h2><p>数据模块边界已经保留，将按第一阶段顺序接入。</p></section>
         )}
       </main>
+      <nav className="mobile-bottom-nav" aria-label="移动端主导航">
+        <button className={active === "today" ? "active" : ""} onClick={() => setActive("today")}><Sparkles /><span>今日学习</span></button>
+        <button className={active === "word-memory" ? "active" : ""} onClick={() => setActive("word-memory")}><LibraryBig /><span>单词记忆</span></button>
+        <button className={active === "review" ? "active" : ""} onClick={() => setActive("review")}><ClipboardCheck /><span>复习</span></button>
+        <button className={active === "settings" ? "active" : ""} onClick={() => setActive("settings")}><UserRound /><span>我的</span></button>
+      </nav>
     </div>
   );
 }
@@ -225,26 +242,26 @@ function formatAttemptTime(value: string) {
 }
 
 function PlanStop({
+  index,
   icon,
   title,
   duration,
   note,
-  x,
-  y,
   tone,
+  onClick,
 }: {
+  index: number;
   icon: ReactNode;
   title: string;
   duration: string;
   note: string;
-  x: string;
-  y: string;
   tone?: "gold";
+  onClick: () => void;
 }) {
   return (
-    <div className={`plan-stop ${tone ?? ""}`} style={{ left: x, top: y }}>
-      <span className="stop-icon">{icon}</span><strong>{title}</strong><b>{duration}</b><small>{note}</small><em>待巩固</em>
-    </div>
+    <button className={`plan-stop ${tone ?? ""}`} onClick={onClick}>
+      <span className="plan-index">{index}</span><span className="stop-icon">{icon}</span><strong>{title}</strong><b>{duration}</b><small>{note}</small><ChevronRight size={19} />
+    </button>
   );
 }
 

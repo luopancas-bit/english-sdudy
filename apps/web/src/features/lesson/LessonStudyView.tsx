@@ -80,7 +80,7 @@ export function LessonStudyView({
 
       <section className="lesson-hero">
         <div>
-          <span>LESSON {String(lesson.id).padStart(2, "0")}</span>
+          <span>第 {String(lesson.id).padStart(2, "0")} 课</span>
           <h1>{lesson.titleEn}</h1>
           <p>{lesson.titleZh}</p>
         </div>

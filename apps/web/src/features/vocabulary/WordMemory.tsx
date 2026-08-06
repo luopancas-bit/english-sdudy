@@ -235,7 +235,7 @@ export function WordMemory({ demo }: { demo: boolean }) {
 
       <div className="word-memory-layout">
         <aside className="chapter-picker">
-          <header><small>CHAPTER DICTIONARY</small><h3>选择章节</h3></header>
+          <header><small>章节词典</small><h3>选择章节</h3></header>
           <div>
             {chapters.map((chapter) => (
               <button

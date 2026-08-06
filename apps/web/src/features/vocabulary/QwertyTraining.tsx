@@ -101,7 +101,7 @@ export function QwertyTraining({
       <header className="typing-header">
         <button className="typing-back" onClick={onClose}><ArrowLeft size={19} />退出训练</button>
         <div>
-          <span>QWERTY GUIDED PRACTICE</span>
+          <span>键入引导练习</span>
           <strong>{index + 1} / {entries.length}</strong>
         </div>
       </header>

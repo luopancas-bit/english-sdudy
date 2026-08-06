@@ -42,8 +42,10 @@ export const demoAssessment: Assessment = {
       id: "l8-listen-1",
       dimension: "listening",
       type: "choice",
-      prompt: "听音频后，选择句子中提到的主要用途。",
-      options: ["发送电子邮件", "制作木桌", "种植花卉", "修理汽车"],
+      prompt: "盲听第 1 句后，选择你听到的关键词。",
+      options: ["curtain", "at dusk", "go through", "look out"],
+      audioUrl: "/api/content/audio/assessment/l8-listen-1.mp3",
+      audioMode: "word",
       points: 1,
     },
     {

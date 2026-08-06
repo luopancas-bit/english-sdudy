@@ -4,7 +4,6 @@ import {
   ChevronRight,
   CircleDashed,
   Clock3,
-  LockKeyhole,
   MapPinned,
   RotateCcw,
 } from "lucide-react";
@@ -73,7 +72,7 @@ export function CourseMap({
       <div className="course-map-heading">
         <div>
           <h2>第一阶段 · 基础掌握</h2>
-          <p>每次正式考核都会记录掌握度，并解锁下一课。</p>
+          <p>正式考核记录真实掌握度；即使上一课尚未达标，也可以继续学习下一课。</p>
         </div>
         <span>共 {data.summary.totalLessons} 课</span>
       </div>
@@ -107,7 +106,7 @@ function LessonRow({
   const details = stateDetails[lesson.state];
   const isReview = lesson.state === "review-due";
   const action = lesson.state === "locked"
-    ? "尚未解锁"
+    ? "仍然学习"
     : isReview
       ? "开始复习"
       : lesson.score === null
@@ -118,7 +117,7 @@ function LessonRow({
     <article className="course-map-row" data-state={lesson.state}>
       <div className="course-map-node" aria-hidden="true">
         {lesson.state === "locked"
-          ? <LockKeyhole size={20} />
+          ? <CircleDashed size={20} />
           : lesson.state === "mastered" || lesson.state === "long-term"
             ? <Check size={23} />
             : String(lesson.lessonId).padStart(2, "0")}
@@ -135,19 +134,18 @@ function LessonRow({
       </div>
       <button
         className="course-map-action"
-        disabled={!lesson.unlocked}
         onClick={() => onStartAssessment(lesson.lessonId, isReview ? "review" : "formal")}
       >
-        {isReview ? <RotateCcw size={17} /> : lesson.state === "locked" ? <LockKeyhole size={16} /> : <Clock3 size={17} />}
+        {isReview ? <RotateCcw size={17} /> : lesson.state === "locked" ? <CircleDashed size={16} /> : <Clock3 size={17} />}
         {action}
-        {lesson.unlocked && <ChevronRight size={16} />}
+        <ChevronRight size={16} />
       </button>
     </article>
   );
 }
 
 const stateDetails: Record<CourseMapLessonState, { label: string; description: string; tone: "gold" | "green" | undefined }> = {
-  locked: { label: "未解锁", description: "完成上一课正式考核后解锁。", tone: undefined },
+  locked: { label: "建议先巩固", description: "上一课尚未通过考核，仍可先学习本课。", tone: undefined },
   ready: { label: "可以开始", description: "本课已解锁，完成正式考核即可记录掌握度。", tone: "green" },
   "review-due": { label: "复习到期", description: "按计划完成复习，稳固长期记忆。", tone: "gold" },
   strengthening: { label: "待巩固", description: "继续练习薄弱项，再进行正式考核。", tone: "gold" },

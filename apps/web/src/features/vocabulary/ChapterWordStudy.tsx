@@ -105,7 +105,7 @@ export function ChapterWordStudy({
       <div className="chapter-study-progress"><i style={{ width: `${progress}%` }} /></div>
 
       <main className="chapter-card-stage">
-        <span className="chapter-card-kicker">WORD CARD · 先回想，再核对</span>
+        <span className="chapter-card-kicker">单词卡 · 先回想，再核对</span>
         <article className={meaningVisible ? "revealed" : ""}>
           <div className="chapter-card-word">
             <h1>{activeCard.term}</h1>

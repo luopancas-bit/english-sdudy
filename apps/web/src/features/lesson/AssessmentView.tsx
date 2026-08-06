@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, Check, Headphones, Mic, PenLine, Play, ScrollText, Square, Target } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Headphones, Mic, Pause, PenLine, Play, RotateCcw, ScrollText, Square, Target } from "lucide-react";
 import { api } from "../../api";
 import { demoAssessment } from "../../demo";
 import type { Assessment, AttemptResult } from "../../types";
@@ -23,11 +23,13 @@ export function AssessmentView({
   demo,
   kind = "formal",
   onClose,
+  onReview,
 }: {
   lessonId: number;
   demo: boolean;
   kind?: "formal" | "practice" | "review";
   onClose: () => void;
+  onReview?: () => void;
 }) {
   const [assessment, setAssessment] = useState<Assessment | null>(demo ? demoAssessment : null);
   const [index, setIndex] = useState(0);
@@ -76,13 +78,13 @@ export function AssessmentView({
   }
 
   if (result) {
-    return <AssessmentResult result={result} lessonTitle={assessment.title} kind={kind} onDone={onClose} />;
+    return <AssessmentResult result={result} lessonTitle={assessment.title} kind={kind} onDone={onClose} onReview={onReview} />;
   }
 
   return (
     <main className="assessment-page">
       <header>
-        <button onClick={onClose}><ArrowLeft size={19} />返回{kind === "review" ? "复习中心" : "今日学习"}</button>
+        <button onClick={onClose}><ArrowLeft size={19} /><span className="desktop-back-label">返回{kind === "review" ? "复习中心" : "今日学习"}</span><span className="mobile-back-label">返回</span></button>
         <div><strong>第 {String(assessment.lessonId).padStart(2, "0")} 课</strong><span>{assessment.title}</span></div>
         <span>{index + 1} / {assessment.questions.length}</span>
       </header>
@@ -95,8 +97,8 @@ export function AssessmentView({
         {question.options ? (
           <div className="answer-options">
             {question.options.map((option, optionIndex) => (
-              <button key={option} className={answer === option ? "selected" : ""} onClick={() => setAnswers((value) => ({ ...value, [question.id]: option }))}>
-                <span>{String.fromCharCode(65 + optionIndex)}</span>{option}{answer === option && <Check size={18} />}
+              <button key={option} aria-pressed={answer === option} className={answer === option ? "selected" : ""} onClick={() => setAnswers((value) => ({ ...value, [question.id]: option }))}>
+                <span>{String.fromCharCode(65 + optionIndex)}</span>{option}
               </button>
             ))}
           </div>
@@ -127,14 +129,45 @@ export function AssessmentView({
 
 function QuestionAudio({ url, mode, start, end }: { url: string; mode?: "word" | "sentence" | undefined; start?: number | undefined; end?: number | undefined }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [state, setState] = useState<"idle" | "playing" | "played" | "error">("idle");
+  const [speed, setSpeed] = useState(1);
   const clipUrl = start === undefined ? url : `${url}#t=${start},${end ?? ""}`;
+
+  async function togglePlayback() {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (!audio.paused) {
+      audio.pause();
+      setState("played");
+      return;
+    }
+    if (start !== undefined && (audio.currentTime < start || (end !== undefined && audio.currentTime >= end))) {
+      audio.currentTime = start;
+    } else if (audio.ended) {
+      audio.currentTime = start ?? 0;
+    }
+    audio.playbackRate = speed;
+    try {
+      await audio.play();
+      setState("playing");
+    } catch {
+      setState("error");
+    }
+  }
+
   return (
     <div className="assessment-audio">
-      <Headphones size={20} />
-      <div><strong>考核音频</strong><small>{mode === "word" ? "本题只播放一个目标单词或短语，可重复核对。" : start === undefined ? "播放本课音频后作答。" : "本题只播放对应句子，可重复核对。"}</small></div>
+      <div className="assessment-audio-copy"><Headphones size={20} /><div><strong>考核音频</strong><small>{mode === "word" ? "本题只播放一个目标单词或短语，可重复核对。" : start === undefined ? "播放本课音频后作答。" : "本题只播放对应句子，可重复核对。"}</small></div></div>
+      <div className="assessment-audio-controls">
+        <button type="button" className="assessment-play-button" onClick={togglePlayback} aria-label={state === "playing" ? "暂停考核音频" : state === "played" ? "重新播放考核音频" : "播放考核音频"}>
+          {state === "playing" ? <Pause /> : state === "played" ? <RotateCcw /> : <Play />}
+        </button>
+        <span aria-live="polite">{state === "idle" ? "尚未播放" : state === "playing" ? "正在播放" : state === "error" ? "音频加载失败，请重试" : "可重新播放"}</span>
+        {mode === "sentence" && <div className="assessment-speed" aria-label="播放速度">{[0.75, 1].map((value) => <button key={value} type="button" className={speed === value ? "active" : ""} onClick={() => { setSpeed(value); if (audioRef.current) audioRef.current.playbackRate = value; }}>{value}×</button>)}</div>}
+      </div>
       <audio
         ref={audioRef}
-        controls
+        className="assessment-audio-element"
         preload="metadata"
         src={clipUrl}
         onPlay={() => {
@@ -148,8 +181,11 @@ function QuestionAudio({ url, mode, start, end }: { url: string; mode?: "word" |
           if (audio && end !== undefined && audio.currentTime >= end) {
             audio.pause();
             if (start !== undefined) audio.currentTime = start;
+            setState("played");
           }
         }}
+        onEnded={() => setState("played")}
+        onError={() => setState("error")}
       />
     </div>
   );
@@ -261,27 +297,30 @@ function AssessmentResult({
   lessonTitle,
   kind,
   onDone,
+  onReview,
 }: {
   result: AttemptResult;
   lessonTitle: string;
   kind: "formal" | "practice" | "review";
   onDone: () => void;
+  onReview?: () => void;
 }) {
   const passed = result.mastery.score >= 80;
+  const weakest = Object.entries(result.scores).reduce((current, entry) => entry[1] < current[1] ? entry : current);
   return (
     <main className="assessment-result-page">
       <section className="result-sheet">
         <div className={`result-seal ${passed ? "passed" : ""}`}><Target size={30} /></div>
         <span>{kind === "review" ? "计划复习结果" : kind === "practice" ? "练习结果" : "正式考核结果"}</span>
         <h1>{lessonTitle}</h1>
-        <div className="result-score"><strong>{result.mastery.score}</strong><small>/ 100</small></div>
-        <p>
-          {kind === "review" && passed
-            ? "本次复习已达到掌握标准，下一次间隔会根据结果自动调整。"
-            : passed
-            ? "本课已达到掌握标准，系统仍会按计划安排复习。"
-            : "本次结果已进入复习计划，你仍然可以继续学习下一课。"}
-        </p>
+        <div className="result-summary">
+          <div className="result-score"><strong>{result.mastery.score}</strong><small>/ 100</small></div>
+          <div className="result-next-action"><span>{passed ? "已达到掌握标准" : "本次尚未达标"}</span><strong>优先巩固：{dimensionNames[weakest[0] as keyof typeof dimensionNames]} {weakest[1]} 分</strong><p>{passed ? "系统仍会按计划安排间隔复习。" : "成绩已进入复习计划，但不会限制继续学习下一课。"}</p></div>
+        </div>
+        <div className="result-actions">
+          {onReview && <button className="primary-button" onClick={onReview}>复习错题与薄弱项<ArrowRight size={18} /></button>}
+          <button className="result-secondary-button" onClick={onDone}>返回{kind === "review" ? "复习中心" : "今日学习"}</button>
+        </div>
         <div className="result-dimensions">
           {Object.entries(dimensionNames).map(([key, label]) => (
             <div key={key}><span>{label}</span><strong>{result.scores[key as keyof typeof result.scores]}</strong></div>
@@ -294,7 +333,6 @@ function AssessmentResult({
             ? "这是今天第一次正式考核，成绩已计入最近三次加权。"
             : "今天已有正式成绩，本次完整保留用于复盘，但不重复计入掌握率。"}
         </div>
-        <button className="primary-button" onClick={onDone}>返回{kind === "review" ? "复习中心" : "今日学习"}<ArrowRight size={18} /></button>
       </section>
     </main>
   );
