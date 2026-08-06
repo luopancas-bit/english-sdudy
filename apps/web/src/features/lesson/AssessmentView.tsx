@@ -78,7 +78,7 @@ export function AssessmentView({
   }
 
   if (result) {
-    return <AssessmentResult result={result} lessonTitle={assessment.title} kind={kind} onDone={onClose} onReview={onReview} />;
+    return <AssessmentResult result={result} lessonTitle={assessment.title} kind={kind} onDone={onClose} {...(onReview ? { onReview } : {})} />;
   }
 
   return (
