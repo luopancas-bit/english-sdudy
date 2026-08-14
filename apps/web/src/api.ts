@@ -1,4 +1,4 @@
-import type { AccountSession, Assessment, AttemptResult, CourseMapData, DashboardData, LearningReportData, LessonContent, RecordingReceipt, ReviewCenterData, User, VocabularyData, VocabularyEntry, VocabularyInput, VocabularyTrainingInput, WordAssessment, WordAssessmentResult, WordMemoryChapter, WordMemoryStats } from "./types";
+import type { AccountSession, Assessment, AttemptResult, CourseMapData, DashboardData, LearningReportData, LessonContent, RecordingReceipt, ReviewCenterData, User, VocabularyData, VocabularyEntry, VocabularyInput, VocabularyTrainingInput, WordAssessment, WordAssessmentResult, WordMemoryChapter, WordMemoryStats, WordReviewResult, WordReviewsData } from "./types";
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, {
@@ -69,6 +69,16 @@ export const api = {
   wordMemoryChapters: () =>
     request<{ chapters: WordMemoryChapter[] }>("/api/word-memory/chapters"),
   wordMemoryStats: () => request<WordMemoryStats>("/api/word-memory/stats"),
+  wordReviews: () => request<WordReviewsData>("/api/word-memory/reviews"),
+  submitWordReview: (reviewId: string, answer: {
+    meaning: string;
+    listening: string;
+    spelling: string;
+    context: string;
+  }) => request<WordReviewResult>(`/api/word-memory/reviews/${reviewId}`, {
+    method: "POST",
+    body: JSON.stringify(answer),
+  }),
   wordAssessment: (lessonId: number) =>
     request<WordAssessment>(`/api/word-memory/chapters/${lessonId}/assessment`),
   submitWordAssessment: (lessonId: number, answers: Array<{

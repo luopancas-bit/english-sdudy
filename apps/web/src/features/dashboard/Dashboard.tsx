@@ -15,7 +15,7 @@ import {
   Target,
   UserRound,
 } from "lucide-react";
-import type { DashboardData } from "../../types";
+import type { DashboardData, WordReviewTask } from "../../types";
 import { CourseMap } from "../map/CourseMap";
 import { AssessmentView } from "../lesson/AssessmentView";
 import { LessonStudyView } from "../lesson/LessonStudyView";
@@ -24,6 +24,7 @@ import { ReviewCenter } from "../review/ReviewCenter";
 import { LearningReport } from "../report/LearningReport";
 import { VocabularyBook } from "../vocabulary/VocabularyBook";
 import { WordMemory } from "../vocabulary/WordMemory";
+import { WordReviewView } from "../vocabulary/WordReviewView";
 
 const navItems = [
   ["today", "今日学习", Sparkles],
@@ -52,6 +53,11 @@ export function Dashboard({
     kind: "formal" | "review";
   } | null>(null);
   const [studyLessonId, setStudyLessonId] = useState<number | null>(null);
+  const [wordReviewTask, setWordReviewTask] = useState<WordReviewTask | null>(null);
+
+  if (wordReviewTask) {
+    return <WordReviewView task={wordReviewTask} onClose={() => setWordReviewTask(null)} onSaved={() => void onRefresh()} />;
+  }
 
   if (assessmentSession) {
     return (
@@ -190,6 +196,7 @@ export function Dashboard({
           <ReviewCenter
             demo={demo}
             onStartReview={(lessonId) => setAssessmentSession({ lessonId, kind: "review" })}
+            onStartWordReview={setWordReviewTask}
           />
         ) : active === "map" ? (
           <CourseMap

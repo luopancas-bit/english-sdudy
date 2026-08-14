@@ -12,10 +12,12 @@ import {
   vocabularyTrainingAttempts,
   wordAssessmentResults,
   wordMemoryTrainingAttempts,
+  wordReviewAttempts,
+  wordReviewStates,
   wrongAnswers,
   type Database,
 } from "@zhuguang/database";
-import type { AssessmentAttempt, MasteryResult, ReviewDecision } from "@zhuguang/domain";
+import { scheduleWordReview, type AssessmentAttempt, type MasteryResult, type ReviewDecision } from "@zhuguang/domain";
 
 export class LearningRepository {
   constructor(private readonly database: Database) {}
@@ -381,7 +383,7 @@ export class LearningRepository {
   }
 
   async wordMemoryStats(userId: string) {
-    const [attempts, assessments] = await Promise.all([
+    const [attempts, assessments, reviewStates] = await Promise.all([
       this.database.query.wordMemoryTrainingAttempts.findMany({
         where: eq(wordMemoryTrainingAttempts.userId, userId),
         orderBy: [desc(wordMemoryTrainingAttempts.occurredAt)],
@@ -389,6 +391,9 @@ export class LearningRepository {
       this.database.query.wordAssessmentResults.findMany({
         where: eq(wordAssessmentResults.userId, userId),
         orderBy: [desc(wordAssessmentResults.occurredAt)],
+      }),
+      this.database.query.wordReviewStates.findMany({
+        where: eq(wordReviewStates.userId, userId),
       }),
     ]);
     const byLesson = new Map<number, {
@@ -425,7 +430,7 @@ export class LearningRepository {
         firstTryAccuracy: attempts.length ? Math.round((firstTryCorrect / attempts.length) * 100) : 0,
         corrections,
         formalAttempts: assessments.length,
-        masteredWords: latestPassedWords(assessments).size,
+        masteredWords: reviewStates.filter((item) => item.status === "mastered").length,
       },
       lessons: Array.from(byLesson, ([lessonId, value]) => ({
         lessonId,
@@ -435,7 +440,7 @@ export class LearningRepository {
         corrections: value.corrections,
         lastPracticedAt: value.lastPracticedAt,
         formalAttempts: assessments.filter((item) => item.lessonId === lessonId).length,
-        masteredWords: latestPassedWords(assessments.filter((item) => item.lessonId === lessonId)).size,
+        masteredWords: reviewStates.filter((item) => item.lessonId === lessonId && item.status === "mastered").length,
       })),
     };
   }
@@ -463,7 +468,108 @@ export class LearningRepository {
       ...result,
     }));
     if (rows.length) await this.database.insert(wordAssessmentResults).values(rows);
+    for (const row of rows) {
+      const previous = await this.database.query.wordReviewStates.findFirst({
+        where: and(
+          eq(wordReviewStates.userId, input.userId),
+          eq(wordReviewStates.lessonId, input.lessonId),
+          eq(wordReviewStates.normalizedTerm, row.normalizedTerm),
+        ),
+      });
+      // A chapter assessment can establish or reset review readiness, but only a due review may advance intervals.
+      const decision = scheduleWordReview(null, row.total, new Date(occurredAt));
+      const state = {
+        id: previous?.id ?? crypto.randomUUID(),
+        userId: input.userId,
+        lessonId: input.lessonId,
+        term: row.term,
+        normalizedTerm: row.normalizedTerm,
+        status: decision.status,
+        step: decision.step,
+        dueAt: decision.dueAt,
+        lastScore: decision.lastScore,
+        updatedAt: occurredAt,
+      };
+      await this.database.insert(wordReviewStates).values(state).onConflictDoUpdate({
+        target: [wordReviewStates.userId, wordReviewStates.lessonId, wordReviewStates.normalizedTerm],
+        set: state,
+      });
+    }
     return { occurredAt, rows };
+  }
+
+  async wordReviews(userId: string, now: string) {
+    const [rows, history] = await Promise.all([
+      this.database.query.wordReviewStates.findMany({
+        where: eq(wordReviewStates.userId, userId),
+        orderBy: [asc(wordReviewStates.dueAt)],
+      }),
+      this.database.query.wordReviewAttempts.findMany({
+        where: eq(wordReviewAttempts.userId, userId),
+        orderBy: [desc(wordReviewAttempts.occurredAt)],
+        limit: 100,
+      }),
+    ]);
+    return {
+      due: rows.filter((row) => row.status !== "mastered" && row.dueAt <= now),
+      upcoming: rows.filter((row) => row.status !== "mastered" && row.dueAt > now),
+      history,
+    };
+  }
+
+  findWordReview(userId: string, reviewId: string) {
+    return this.database.query.wordReviewStates.findFirst({
+      where: and(eq(wordReviewStates.id, reviewId), eq(wordReviewStates.userId, userId)),
+    });
+  }
+
+  async saveWordReviewAttempt(input: {
+    userId: string;
+    reviewId: string;
+    scores: { meaning: number; listening: number; spelling: number; context: number; total: number };
+    occurredAt: string;
+  }) {
+    const previous = await this.findWordReview(input.userId, input.reviewId);
+    if (!previous) return { error: "not_found" as const };
+    if (previous.status === "mastered") return { error: "mastered" as const };
+    if (previous.dueAt > input.occurredAt) return { error: "not_due" as const, review: previous };
+    const decision = scheduleWordReview({
+      status: previous.status,
+      step: previous.step,
+      dueAt: previous.dueAt,
+      lastScore: previous.lastScore,
+    }, input.scores.total, new Date(input.occurredAt));
+    const review = {
+      ...previous,
+      status: decision.status,
+      step: decision.step,
+      dueAt: decision.dueAt,
+      lastScore: decision.lastScore,
+      updatedAt: input.occurredAt,
+    };
+    const evidence = {
+      id: crypto.randomUUID(),
+      reviewId: previous.id,
+      userId: input.userId,
+      lessonId: previous.lessonId,
+      term: previous.term,
+      normalizedTerm: previous.normalizedTerm,
+      ...input.scores,
+      passed: input.scores.total >= 80,
+      decision: decision.result as "advance" | "retreat" | "master",
+      stepBefore: previous.step,
+      stepAfter: decision.step,
+      occurredAt: input.occurredAt,
+    };
+    await this.database.insert(wordReviewAttempts).values(evidence);
+    await this.database.update(wordReviewStates).set({
+      status: review.status,
+      step: review.step,
+      dueAt: review.dueAt,
+      lastScore: review.lastScore,
+      updatedAt: review.updatedAt,
+    }).where(and(eq(wordReviewStates.id, previous.id), eq(wordReviewStates.userId, input.userId)));
+    return { review, evidence };
   }
 
   async dashboard(userId: string, now: string) {
@@ -512,12 +618,4 @@ export class LearningRepository {
     ]);
     return { attempts: attemptRows, mastery };
   }
-}
-
-function latestPassedWords(rows: Array<{ normalizedTerm: string; passed: boolean }>) {
-  const latest = new Map<string, boolean>();
-  for (const row of rows) {
-    if (!latest.has(row.normalizedTerm)) latest.set(row.normalizedTerm, row.passed);
-  }
-  return new Set(Array.from(latest).filter(([, passed]) => passed).map(([term]) => term));
 }

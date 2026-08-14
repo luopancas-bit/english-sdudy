@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createDatabase, migrate } from "@zhuguang/database";
 import { createApp } from "./app.js";
 import type { AppConfig } from "./config.js";
@@ -32,7 +32,10 @@ describe("learning account flow", () => {
     await fs.writeFile(path.join(contentDirectory, "audio", "vocabulary", "us", "a.m4a"), "word-audio");
     await fs.writeFile(path.join(contentDirectory, "audio", "vocabulary", "index.json"), JSON.stringify({
       version: 1,
-      entries: { a: { term: "A", accents: { us: { path: "us/a.m4a", mimeType: "audio/mp4" } } } },
+      entries: {
+        a: { term: "A", accents: { us: { path: "us/a.m4a", mimeType: "audio/mp4" } } },
+        synthetic: { term: "synthetic", accents: { us: { path: "us/a.m4a", mimeType: "audio/mp4" } } },
+      },
     }));
     await fs.writeFile(
       path.join(contentDirectory, "assessments", "lesson-01.json"),
@@ -82,7 +85,7 @@ describe("learning account flow", () => {
       RECORDINGS_DIR: path.join(directory, "recordings"),
       SESSION_COOKIE_NAME: "test_session",
       SESSION_COOKIE_SECURE: false,
-      SESSION_TTL_DAYS: 1,
+      SESSION_TTL_DAYS: 7,
       SESSION_SECRET: secret,
     };
     const app = await createApp(config, database);
@@ -488,9 +491,19 @@ describe("learning account flow", () => {
         term: "synthetic",
         spellingPrompt: "合成的",
         clozePrompt: "A _____ lesson.",
+        audioUrl: "/api/word-memory/chapters/1/assessment-audio/0/us",
       }],
     });
     expect(wordAssessment.json().items[0]).not.toHaveProperty("meaning");
+    expect(wordAssessment.json().items[0].audioUrl).not.toContain("synthetic");
+    const wordMemoryAudio = await app.inject({
+      method: "GET",
+      url: wordAssessment.json().items[0].audioUrl,
+      headers: { cookie },
+    });
+    expect(wordMemoryAudio.statusCode).toBe(200);
+    expect(wordMemoryAudio.headers["content-type"]).toContain("audio/mp4");
+    expect(wordMemoryAudio.body).toBe("word-audio");
 
     const formalWordAssessment = await app.inject({
       method: "POST",
@@ -520,6 +533,90 @@ describe("learning account flow", () => {
       }],
     });
 
+    const wordReviews = await app.inject({
+      method: "GET",
+      url: "/api/word-memory/reviews",
+      headers: { cookie },
+    });
+    expect(wordReviews.statusCode).toBe(200);
+    expect(wordReviews.json()).toMatchObject({
+      due: [],
+      upcoming: [{
+        lessonId: 1,
+        term: "synthetic",
+        status: "reviewing",
+        step: 0,
+        lastScore: 100,
+        dueAt: expect.any(String),
+      }],
+      history: [],
+    });
+
+    const repeatedFormalWordAssessment = await app.inject({
+      method: "POST",
+      url: "/api/word-memory/chapters/1/assessment",
+      headers: { cookie },
+      payload: {
+        answers: [{ term: "synthetic", meaning: "合成的", listening: "synthetic", spelling: "synthetic", context: "synthetic" }],
+      },
+    });
+    expect(repeatedFormalWordAssessment.statusCode).toBe(201);
+    const reviewsAfterRepeatedFormal = await app.inject({ method: "GET", url: "/api/word-memory/reviews", headers: { cookie } });
+    expect(reviewsAfterRepeatedFormal.json()).toMatchObject({
+      upcoming: [{ id: wordReviews.json().upcoming[0].id, status: "reviewing", step: 0 }],
+    });
+    const scheduledReview = reviewsAfterRepeatedFormal.json().upcoming[0];
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(Date.parse(scheduledReview.dueAt) + 1_000));
+    const dueWordReviews = await app.inject({
+      method: "GET",
+      url: "/api/word-memory/reviews",
+      headers: { cookie },
+    });
+    expect(dueWordReviews.statusCode).toBe(200);
+    expect(dueWordReviews.json()).toMatchObject({
+      due: [{ id: scheduledReview.id, term: "synthetic", step: 0 }],
+      upcoming: [],
+    });
+
+    const submittedReview = await app.inject({
+      method: "POST",
+      url: `/api/word-memory/reviews/${scheduledReview.id}`,
+      headers: { cookie },
+      payload: {
+        meaning: "合成的",
+        listening: "synthetic",
+        spelling: "synthetic",
+        context: "synthetic",
+      },
+    });
+    expect(submittedReview.statusCode).toBe(201);
+    expect(submittedReview.json()).toMatchObject({
+      review: { id: scheduledReview.id, status: "reviewing", step: 1, lastScore: 100 },
+      evidence: {
+        reviewId: scheduledReview.id,
+        term: "synthetic",
+        total: 100,
+        passed: true,
+        decision: "advance",
+        stepBefore: 0,
+        stepAfter: 1,
+        occurredAt: expect.any(String),
+      },
+    });
+
+    const reviewsAfterSubmission = await app.inject({
+      method: "GET",
+      url: "/api/word-memory/reviews",
+      headers: { cookie },
+    });
+    expect(reviewsAfterSubmission.json()).toMatchObject({
+      due: [],
+      upcoming: [{ id: scheduledReview.id, step: 1 }],
+      history: [{ reviewId: scheduledReview.id, decision: "advance", total: 100 }],
+    });
+    vi.useRealTimers();
+
     const wordMemoryStats = await app.inject({
       method: "GET",
       url: "/api/word-memory/stats",
@@ -527,8 +624,8 @@ describe("learning account flow", () => {
     });
     expect(wordMemoryStats.statusCode).toBe(200);
     expect(wordMemoryStats.json()).toMatchObject({
-      summary: { attempts: 2, practicedItems: 2, firstTryAccuracy: 50, corrections: 1, formalAttempts: 1, masteredWords: 1 },
-      lessons: [{ lessonId: 1, attempts: 2, practicedItems: 2, firstTryAccuracy: 50, corrections: 1, formalAttempts: 1, masteredWords: 1 }],
+      summary: { attempts: 2, practicedItems: 2, firstTryAccuracy: 50, corrections: 1, formalAttempts: 2, masteredWords: 0 },
+      lessons: [{ lessonId: 1, attempts: 2, practicedItems: 2, firstTryAccuracy: 50, corrections: 1, formalAttempts: 2, masteredWords: 0 }],
     });
 
     await app.close();

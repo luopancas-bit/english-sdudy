@@ -198,4 +198,74 @@ export async function migrate(database: Database): Promise<void> {
     CREATE INDEX IF NOT EXISTS word_assessment_term_idx
     ON word_assessment_results(user_id, lesson_id, normalized_term, occurred_at)
   `);
+  await database.run(sql`
+    CREATE TABLE IF NOT EXISTS word_review_states (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      lesson_id INTEGER NOT NULL,
+      term TEXT NOT NULL,
+      normalized_term TEXT NOT NULL,
+      status TEXT NOT NULL,
+      step INTEGER NOT NULL,
+      due_at TEXT NOT NULL,
+      last_score REAL NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE(user_id, lesson_id, normalized_term)
+    )
+  `);
+  await database.run(sql`
+    CREATE INDEX IF NOT EXISTS word_review_due_idx
+    ON word_review_states(user_id, due_at)
+  `);
+  await database.run(sql`
+    INSERT OR IGNORE INTO word_review_states
+      (id, user_id, lesson_id, term, normalized_term, status, step, due_at, last_score, updated_at)
+    SELECT
+      lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-a' || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))),
+      result.user_id,
+      result.lesson_id,
+      result.term,
+      result.normalized_term,
+      CASE WHEN result.passed = 1 THEN 'reviewing' ELSE 'learning' END,
+      0,
+      strftime('%Y-%m-%dT%H:%M:%fZ', result.occurred_at, '+1 day'),
+      result.total,
+      result.occurred_at
+    FROM word_assessment_results AS result
+    WHERE NOT EXISTS (
+      SELECT 1 FROM word_assessment_results AS newer
+      WHERE newer.user_id = result.user_id
+        AND newer.lesson_id = result.lesson_id
+        AND newer.normalized_term = result.normalized_term
+        AND newer.occurred_at > result.occurred_at
+    )
+  `);
+  await database.run(sql`
+    CREATE TABLE IF NOT EXISTS word_review_attempts (
+      id TEXT PRIMARY KEY,
+      review_id TEXT NOT NULL REFERENCES word_review_states(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      lesson_id INTEGER NOT NULL,
+      term TEXT NOT NULL,
+      normalized_term TEXT NOT NULL,
+      meaning REAL NOT NULL,
+      listening REAL NOT NULL,
+      spelling REAL NOT NULL,
+      context REAL NOT NULL,
+      total REAL NOT NULL,
+      passed INTEGER NOT NULL,
+      decision TEXT NOT NULL,
+      step_before INTEGER NOT NULL,
+      step_after INTEGER NOT NULL,
+      occurred_at TEXT NOT NULL
+    )
+  `);
+  await database.run(sql`
+    CREATE INDEX IF NOT EXISTS word_review_attempt_user_idx
+    ON word_review_attempts(user_id, occurred_at)
+  `);
+  await database.run(sql`
+    CREATE INDEX IF NOT EXISTS word_review_attempt_state_idx
+    ON word_review_attempts(review_id, occurred_at)
+  `);
 }

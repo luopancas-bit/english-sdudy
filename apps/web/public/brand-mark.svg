@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="逐光英语">
+  <rect width="64" height="64" rx="18" fill="#174b3a"/>
+  <circle cx="43" cy="20" r="8" fill="#e1a72e"/>
+  <path d="M17 43c8-1 15-6 20-14 1 10-3 18-13 22" fill="none" stroke="#fffaf0" stroke-width="5" stroke-linecap="round"/>
+  <path d="M18 43c7 0 12 3 15 8" fill="none" stroke="#9bc4b6" stroke-width="4" stroke-linecap="round"/>
+</svg>

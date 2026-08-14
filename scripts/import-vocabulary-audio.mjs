@@ -1,6 +1,5 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import os from "node:os";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
@@ -10,6 +9,11 @@ const contentRoot = path.resolve(root, process.argv[2] ?? "content-private");
 const assessmentRoot = path.join(contentRoot, "assessments");
 const libraryRoot = path.join(contentRoot, "audio", "vocabulary");
 const accent = process.argv.includes("--uk") ? "uk" : "us";
+const missingOnly = process.argv.includes("--missing-only");
+const lessonsArgument = process.argv.find((argument) => argument.startsWith("--lessons="));
+const lessonFilter = lessonsArgument
+  ? new Set(lessonsArgument.slice("--lessons=".length).split(",").map(Number).filter(Number.isInteger))
+  : null;
 
 const normalize = (value) => value.toLowerCase().normalize("NFKC").replace(/[^a-z0-9' ]/g, "").replace(/\s+/g, " ").trim();
 const slug = (value) => normalize(value).replace(/'/g, "").replace(/ /g, "-");
@@ -19,9 +23,22 @@ const files = (await fs.readdir(assessmentRoot)).filter((name) => /^lesson-\d+\.
 const terms = new Map();
 for (const filename of files) {
   const assessment = JSON.parse(await fs.readFile(path.join(assessmentRoot, filename), "utf8"));
+  if (lessonFilter && !lessonFilter.has(assessment.lessonId)) continue;
   for (const question of assessment.questions ?? []) {
     if (question.dimension === "listening") terms.set(normalize(question.answer), question.answer);
   }
+}
+
+const lessons = JSON.parse(await fs.readFile(path.join(contentRoot, "lessons.json"), "utf8"));
+for (const lesson of lessons) {
+  if (lessonFilter && !lessonFilter.has(lesson.id)) continue;
+  const vocabulary = new Map((lesson.vocabulary ?? []).map((item) => [normalize(item.term), item.term]));
+  const eligibleTerms = (lesson.sentences ?? [])
+    .flatMap((sentence) => sentence.cloze && vocabulary.has(normalize(sentence.cloze))
+      ? [vocabulary.get(normalize(sentence.cloze))]
+      : [])
+    .slice(0, 5);
+  for (const term of eligibleTerms) terms.set(normalize(term), term);
 }
 
 await fs.mkdir(path.join(libraryRoot, accent), { recursive: true });
@@ -36,6 +53,11 @@ try {
 
 for (const [key, term] of terms) {
   const base = slug(term);
+  const current = library.entries[key] ?? { term, accents: {} };
+  if (missingOnly && current.accents[accent]) {
+    console.log(`${term}: existing -> ${current.accents[accent].path}`);
+    continue;
+  }
   let asset;
   if (!term.includes(" ")) {
     try {
@@ -64,20 +86,16 @@ for (const [key, term] of terms) {
     }
   }
   if (!asset) {
-    const temporary = path.join(os.tmpdir(), `english-study-${process.pid}-${base}.aiff`);
     const relativePath = `${accent}/${base}.m4a`;
     const voice = accent === "uk" ? "Daniel" : "Samantha";
-    await run("say", ["-v", voice, "-o", temporary, "--", term]);
-    await run("afconvert", ["-f", "m4af", "-d", "aac", temporary, path.join(libraryRoot, relativePath)]);
+    await run("say", ["-v", voice, "-o", path.join(libraryRoot, relativePath), "--", term]);
     await fs.chmod(path.join(libraryRoot, relativePath), 0o644);
-    await fs.unlink(temporary);
     asset = {
       path: relativePath,
       mimeType: "audio/mp4",
       source: { kind: "generated", provider: `macOS ${voice}`, reason: "dictionary audio unavailable" },
     };
   }
-  const current = library.entries[key] ?? { term, accents: {} };
   current.term = term;
   current.accents[accent] = asset;
   library.entries[key] = current;
@@ -86,4 +104,4 @@ for (const [key, term] of terms) {
 
 await fs.writeFile(path.join(libraryRoot, "index.json"), `${JSON.stringify(library, null, 2)}\n`);
 await fs.chmod(path.join(libraryRoot, "index.json"), 0o644);
-console.log(`Imported ${terms.size} listening terms into ${path.join(libraryRoot, "index.json")}`);
+console.log(`Imported ${terms.size} assessment and word-review terms into ${path.join(libraryRoot, "index.json")}`);

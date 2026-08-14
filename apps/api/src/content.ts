@@ -148,10 +148,14 @@ export class ContentModule {
     const assessment = await this.loadAssessment(lessonId);
     const question = assessment.questions.find((item) => item.id === questionId);
     if (!question || question.dimension !== "listening") return null;
+    return this.vocabularyAudio(question.answer, accent);
+  }
+
+  async vocabularyAudio(term: string, accent: "us" | "uk") {
     try {
       const raw = await fs.readFile(path.join(this.contentDirectory, "audio", "vocabulary", "index.json"), "utf8");
       const library = vocabularyAudioSchema.parse(JSON.parse(raw));
-      const asset = library.entries[normalize(question.answer)]?.accents[accent];
+      const asset = library.entries[normalize(term)]?.accents[accent];
       if (!asset) return null;
       const audioRoot = path.resolve(this.contentDirectory, "audio", "vocabulary");
       const filename = path.resolve(audioRoot, asset.path);
@@ -193,7 +197,6 @@ export class ContentModule {
 
   async wordAssessment(lessonId: number): Promise<WordAssessmentItem[]> {
     const lesson = await this.loadLesson(lessonId);
-    const timings = await this.loadSentenceTimings(lessonId);
     const vocabulary = new Map(
       lesson.vocabulary
         .filter((item) => item.definition.trim())
@@ -202,7 +205,6 @@ export class ContentModule {
     const eligible = lesson.sentences.flatMap((sentence) => {
       const term = sentence.cloze ? vocabulary.get(normalize(sentence.cloze)) : undefined;
       if (!term) return [];
-      const timing = timings.get(sentence.text);
       const escaped = term.term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       const clozePrompt = sentence.text.replace(new RegExp(escaped, "i"), "_____");
       const alternatives = lesson.vocabulary
@@ -216,11 +218,13 @@ export class ContentModule {
         sentenceId: sentence.id,
         sentence: sentence.text,
         clozePrompt,
-        audioUrl: `/api/lessons/${lessonId}/audio/us`,
-        ...(timing ? { audioStart: timing.start, audioEnd: timing.end } : {}),
+        audioUrl: "",
       }];
     });
-    return eligible.slice(0, 5);
+    return eligible.slice(0, 5).map((item, index) => ({
+      ...item,
+      audioUrl: `/api/word-memory/chapters/${lessonId}/assessment-audio/${index}/us`,
+    }));
   }
 
   private async loadSentenceTimings(lessonId: number) {

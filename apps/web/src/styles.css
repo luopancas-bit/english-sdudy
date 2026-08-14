@@ -650,6 +650,12 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .review-state.error { color: #a84132; }
 .review-state h2 { font: 600 24px "Noto Serif SC", serif; margin: 16px 0 4px; }
 .review-state p { margin: 0; }
+.word-review-block { display: grid; gap: 12px; margin: 18px 0 28px; padding: 18px; border: 1px solid #d9e5df; border-radius: 20px; background: #f5faf7; }
+.review-section-heading.compact h3 { margin: 0; font: 600 19px "Noto Serif SC", serif; }
+.review-lesson-card.word { background: #fff; }
+.review-lesson-card > button:disabled { cursor: not-allowed; opacity: .55; }
+.review-empty.compact { min-height: 84px; background: #fff; }
+.word-review-upcoming { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.7; }
 
 .course-map { display: grid; gap: 30px; }
 .course-map-summary {

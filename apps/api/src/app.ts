@@ -94,6 +94,9 @@ const wordAssessmentSubmissionSchema = z.object({
   })).min(1).max(5),
 });
 
+const wordReviewParamsSchema = z.object({ reviewId: z.string().uuid() });
+const wordReviewSubmissionSchema = wordAssessmentSubmissionSchema.shape.answers.element.omit({ term: true });
+
 const COURSE_MAP_LESSON_COUNT = 3;
 
 export async function createApp(
@@ -579,6 +582,61 @@ export async function createApp(
     return repository.wordMemoryStats(user.id);
   });
 
+  app.get("/api/word-memory/reviews", async (request, reply) => {
+    const user = await requireUser(request, reply);
+    if (!user) return;
+    const reviews = await repository.wordReviews(user.id, new Date().toISOString());
+    const withTask = async <T extends { lessonId: number; normalizedTerm: string }>(review: T) => {
+      const item = (await content.wordAssessment(review.lessonId))
+        .find((candidate) => normalizeVocabularyTerm(candidate.term) === review.normalizedTerm);
+      return {
+        ...review,
+        task: item ? {
+          meaningOptions: item.meaningOptions,
+          clozePrompt: item.clozePrompt,
+          spellingPrompt: item.meaning,
+          audioUrl: item.audioUrl,
+        } : null,
+      };
+    };
+    return {
+      due: await Promise.all(reviews.due.map(withTask)),
+      upcoming: await Promise.all(reviews.upcoming.map(withTask)),
+      history: reviews.history,
+    };
+  });
+
+  app.post("/api/word-memory/reviews/:reviewId", async (request, reply) => {
+    const user = await requireUser(request, reply);
+    if (!user) return;
+    const { reviewId } = wordReviewParamsSchema.parse(request.params);
+    const answer = wordReviewSubmissionSchema.parse(request.body);
+    const scheduled = await repository.findWordReview(user.id, reviewId);
+    if (!scheduled) return reply.code(404).send({ error: "复习任务不存在" });
+    const item = (await content.wordAssessment(scheduled.lessonId))
+      .find((candidate) => normalizeVocabularyTerm(candidate.term) === scheduled.normalizedTerm);
+    if (!item) return reply.code(409).send({ error: "复习任务对应的课程词条已不存在" });
+    const meaning = answer.meaning === item.meaning ? 100 : 0;
+    const listening = normalizeVocabularyTerm(answer.listening) === scheduled.normalizedTerm ? 100 : 0;
+    const spelling = normalizeVocabularyTerm(answer.spelling) === scheduled.normalizedTerm ? 100 : 0;
+    const context = normalizeVocabularyTerm(answer.context) === scheduled.normalizedTerm ? 100 : 0;
+    const total = meaning * 0.25 + listening * 0.25 + spelling * 0.3 + context * 0.2;
+    const saved = await repository.saveWordReviewAttempt({
+      userId: user.id,
+      reviewId,
+      scores: { meaning, listening, spelling, context, total },
+      occurredAt: new Date().toISOString(),
+    });
+    if ("error" in saved) {
+      if (saved.error === "not_due") return reply.code(409).send({ error: "这项复习还未到期", dueAt: saved.review.dueAt });
+      if (saved.error === "mastered") return reply.code(409).send({ error: "这个单词已完成间隔复习" });
+      return reply.code(404).send({ error: "复习任务不存在" });
+    }
+    const { userId: _reviewUserId, ...review } = saved.review;
+    const { userId: _evidenceUserId, normalizedTerm: _normalizedTerm, ...evidence } = saved.evidence;
+    return reply.code(201).send({ review, evidence });
+  });
+
   app.get("/api/word-memory/chapters/:lessonId/assessment", async (request, reply) => {
     const user = await requireUser(request, reply);
     if (!user) return;
@@ -669,6 +727,21 @@ export async function createApp(
     const audio = await content.lessonAudio(params.lessonId, params.accent);
     if (!audio) return reply.code(404).send({ error: "本课音频资源尚未部署" });
     return reply.type("audio/mpeg").header("Cache-Control", "private, max-age=86400").send(audio);
+  });
+
+  app.get("/api/word-memory/chapters/:lessonId/assessment-audio/:itemIndex/:accent", async (request, reply) => {
+    const user = await requireUser(request, reply);
+    if (!user) return;
+    const params = z.object({
+      lessonId: z.coerce.number().int().min(1).max(40),
+      itemIndex: z.coerce.number().int().min(0).max(4),
+      accent: z.enum(["us", "uk"]),
+    }).parse(request.params);
+    const item = (await content.wordAssessment(params.lessonId))[params.itemIndex];
+    if (!item) return reply.code(404).send({ error: "本课没有这个考核词条" });
+    const audio = await content.vocabularyAudio(item.term, params.accent);
+    if (!audio) return reply.code(404).send({ error: "本词音频尚未部署" });
+    return reply.type(audio.mimeType).header("Cache-Control", "private, max-age=86400").send(audio.data);
   });
 
   app.get("/api/lessons/:lessonId/assessment-audio/:questionId/:accent", async (request, reply) => {

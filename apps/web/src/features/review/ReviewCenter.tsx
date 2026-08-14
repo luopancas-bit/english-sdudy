@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { api } from "../../api";
 import { demoReviewCenter } from "../../demo";
-import type { ReviewCenterData, ReviewLesson } from "../../types";
+import type { ReviewCenterData, ReviewLesson, WordReviewsData, WordReviewTask } from "../../types";
 
 const dimensionNames = {
   listening: "听力",
@@ -21,19 +21,25 @@ const dimensionNames = {
 export function ReviewCenter({
   demo,
   onStartReview,
+  onStartWordReview,
 }: {
   demo: boolean;
   onStartReview: (lessonId: number) => void;
+  onStartWordReview: (task: WordReviewTask) => void;
 }) {
   const [data, setData] = useState<ReviewCenterData | null>(() => demo ? demoReviewCenter : null);
+  const [wordData, setWordData] = useState<WordReviewsData | null>(() => demo ? { due: [], upcoming: [], history: [] } : null);
   const [error, setError] = useState("");
 
   useEffect(() => {
     if (demo) return;
     let cancelled = false;
-    api.reviewCenter()
-      .then((value) => {
-        if (!cancelled) setData(value);
+    Promise.all([api.reviewCenter(), api.wordReviews()])
+      .then(([reviewValue, wordValue]) => {
+        if (!cancelled) {
+          setData(reviewValue);
+          setWordData(wordValue);
+        }
       })
       .catch((caught) => {
         if (!cancelled) setError(caught instanceof Error ? caught.message : "复习数据加载失败");
@@ -53,7 +59,7 @@ export function ReviewCenter({
     );
   }
 
-  if (!data) {
+  if (!data || !wordData) {
     return <section className="review-state">正在整理错题与到期复习…</section>;
   }
 
@@ -64,9 +70,9 @@ export function ReviewCenter({
         <SummaryCard
           icon={<RotateCcw />}
           label="今天待复习"
-          value={data.due.length}
-          note={data.due.length ? "按到期顺序完成" : "今天的复习已完成"}
-          tone={data.due.length ? "gold" : "green"}
+          value={data.due.length + wordData.due.length}
+          note={data.due.length + wordData.due.length ? `课程 ${data.due.length} · 单词 ${wordData.due.length}` : "今天的复习已完成"}
+          tone={data.due.length + wordData.due.length ? "gold" : "green"}
         />
         <SummaryCard
           icon={<BookOpenCheck />}
@@ -90,6 +96,25 @@ export function ReviewCenter({
               <h2>到期复习</h2>
             </div>
             <small>只有计划复习和正式考核会更新掌握度</small>
+          </div>
+
+          <div className="word-review-block">
+            <div className="review-section-heading compact">
+              <div><span>间隔记忆</span><h3>到期单词</h3></div>
+              <small>1、3、7、14、30 天复核；未通过不锁下一课</small>
+            </div>
+            {wordData.due.length ? (
+              <div className="review-lesson-list">
+                {wordData.due.map((word) => (
+                  <article className="review-lesson-card due word" key={word.id}>
+                    <div className="review-lesson-date"><span>已到期</span><small>第 {word.step + 1} 次复核</small></div>
+                    <div className="review-lesson-copy"><span>第 {String(word.lessonId).padStart(2, "0")} 课单词</span><h3>待复习单词</h3><div><em>上次 {word.lastScore} 分</em></div></div>
+                    <button disabled={!word.task} onClick={() => onStartWordReview(word)}>{word.task ? "开始复习" : "题目缺失"}<ArrowRight size={17} /></button>
+                  </article>
+                ))}
+              </div>
+            ) : <div className="review-empty compact"><CheckCircle2 /><div><strong>今天没有到期单词</strong><span>首次正式考核后会自动进入间隔复习。</span></div></div>}
+            {wordData.upcoming.length ? <p className="word-review-upcoming">接下来：{wordData.upcoming.slice(0, 3).map((word) => `第 ${String(word.lessonId).padStart(2, "0")} 课单词（${formatShortDate(word.dueAt)}）`).join("、")}</p> : null}
           </div>
 
           {data.due.length ? (

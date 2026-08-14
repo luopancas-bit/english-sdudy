@@ -21,10 +21,13 @@ content-private/
 ```bash
 pnpm audio:import
 pnpm audio:import -- --uk
+pnpm audio:import -- --lessons=1,2,3
+pnpm audio:import -- --uk --lessons=1,2,3
+pnpm audio:import -- --missing-only --lessons=1,2,3
 ```
 
-导入器会扫描考核文件中的听力答案，单词优先从 Free Dictionary API 取得可用发音；词典没有音频、网络不可用或目标是短语时，会生成一份固定音频入库。正式考核只读取已入库文件，不依赖外网。
+导入器会同时扫描课程考核听力答案和单词记忆中实际进入正式考核、间隔复习的词条。可用 `--lessons=` 只补指定课程，配合 `--missing-only` 保留已有音频、只填缺口。单词优先从 Free Dictionary API 取得可用发音；词典没有音频、网络不可用或目标是短语时，会生成一份固定音频入库。正式考核只读取已入库文件，不依赖外网。
 
 ## 接口保护
 
-页面只能通过课程号和题目编号请求音频。服务端在登录校验后再查找题目答案和音频索引；答案不会出现在 URL 中。路径也会被限制在 `audio/vocabulary` 目录内。
+页面只能通过课程号和不透明的题目编号请求音频。服务端在登录校验后再查找题目答案和音频索引；答案不会出现在 URL 中。路径也会被限制在 `audio/vocabulary` 目录内。

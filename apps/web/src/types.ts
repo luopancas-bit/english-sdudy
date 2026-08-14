@@ -275,6 +275,51 @@ export interface WordAssessmentResult {
   }>;
 }
 
+export interface WordReviewTask {
+  id: string;
+  lessonId: number;
+  term: string;
+  normalizedTerm: string;
+  status: "learning" | "reviewing" | "mastered";
+  step: number;
+  dueAt: string;
+  lastScore: number;
+  task: {
+    meaningOptions: string[];
+    clozePrompt: string;
+    spellingPrompt: string;
+    audioUrl: string;
+  } | null;
+}
+
+export interface WordReviewEvidence {
+  id: string;
+  reviewId: string;
+  lessonId: number;
+  term: string;
+  meaning: number;
+  listening: number;
+  spelling: number;
+  context: number;
+  total: number;
+  passed: boolean;
+  decision: "advance" | "retreat" | "master";
+  stepBefore: number;
+  stepAfter: number;
+  occurredAt: string;
+}
+
+export interface WordReviewsData {
+  due: WordReviewTask[];
+  upcoming: WordReviewTask[];
+  history: WordReviewEvidence[];
+}
+
+export interface WordReviewResult {
+  review: Omit<WordReviewTask, "task">;
+  evidence: WordReviewEvidence;
+}
+
 export interface LearningReportData {
   summary: {
     totalAttempts: number;

@@ -219,3 +219,49 @@ export const wordAssessmentResults = sqliteTable(
     index("word_assessment_term_idx").on(table.userId, table.lessonId, table.normalizedTerm, table.occurredAt),
   ],
 );
+
+export const wordReviewStates = sqliteTable(
+  "word_review_states",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    lessonId: integer("lesson_id").notNull(),
+    term: text("term").notNull(),
+    normalizedTerm: text("normalized_term").notNull(),
+    status: text("status", { enum: ["learning", "reviewing", "mastered"] }).notNull(),
+    step: integer("step").notNull(),
+    dueAt: text("due_at").notNull(),
+    lastScore: real("last_score").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("word_review_user_term_unique").on(table.userId, table.lessonId, table.normalizedTerm),
+    index("word_review_due_idx").on(table.userId, table.dueAt),
+  ],
+);
+
+export const wordReviewAttempts = sqliteTable(
+  "word_review_attempts",
+  {
+    id: text("id").primaryKey(),
+    reviewId: text("review_id").notNull().references(() => wordReviewStates.id, { onDelete: "cascade" }),
+    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    lessonId: integer("lesson_id").notNull(),
+    term: text("term").notNull(),
+    normalizedTerm: text("normalized_term").notNull(),
+    meaning: real("meaning").notNull(),
+    listening: real("listening").notNull(),
+    spelling: real("spelling").notNull(),
+    context: real("context").notNull(),
+    total: real("total").notNull(),
+    passed: integer("passed", { mode: "boolean" }).notNull(),
+    decision: text("decision", { enum: ["advance", "retreat", "master"] }).notNull(),
+    stepBefore: integer("step_before").notNull(),
+    stepAfter: integer("step_after").notNull(),
+    occurredAt: text("occurred_at").notNull(),
+  },
+  (table) => [
+    index("word_review_attempt_user_idx").on(table.userId, table.occurredAt),
+    index("word_review_attempt_state_idx").on(table.reviewId, table.occurredAt),
+  ],
+);
