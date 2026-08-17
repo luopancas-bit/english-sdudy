@@ -11,6 +11,9 @@ importers:
       '@playwright/test':
         specifier: ^1.54.2
         version: 1.61.1
+      js-mdict:
+        specifier: 6.0.6
+        version: 6.0.6
       typescript:
         specifier: ^5.8.3
         version: 5.9.3
@@ -1321,6 +1324,10 @@ packages:
   commander@2.20.3:
     resolution: {integrity: sha512-GpVkmM8vF2vQUkj2LvZmD35JxeJOLCwJ9cUkugyk2nuhbv3+mJvpLYYt+0+USMxE+oj+ey/lJEnhZw75x/OMcQ==}
 
+  commander@13.1.0:
+    resolution: {integrity: sha512-/rFeCpNJQbhSZjGVwO9RFV3xPqbnERS8MmIQzCtD/zl6gpJuV/bMLuN92oG3F7d8oDEHHRrujSXNUr8fpjntKw==}
+    engines: {node: '>=18'}
+
   common-tags@1.8.2:
     resolution: {integrity: sha512-gk/Z852D2Wtb//0I+kRFNKKE9dIIVirjoqPoA1wJU+XePVXZfGeBpk45+A1rKO4Q43prqWBNY/MiIeRLbPWUaA==}
     engines: {node: '>=4.0.0'}
@@ -1871,6 +1878,10 @@ packages:
   js-base64@3.9.1:
     resolution: {integrity: sha512-U73qptcvf/HIOauFOmqT3a0mDUp0MYlfd15oqoe9kqZt5XhiXVb+HG09sLvI9PQ9tZIBFS4nlErai8zbWazP0g==}
 
+  js-mdict@6.0.6:
+    resolution: {integrity: sha512-kfgDT+fgDtC15CJY1fUgGosJ9dtUPm5t2UERU/DUf2L9OVb3TNm1S9Yf78QXHZ9MrweFJqyhESoiJvc5Uv0VPA==}
+    engines: {node: '>=10.20.0'}
+
   js-tokens@4.0.0:
     resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}
 
@@ -1903,6 +1914,10 @@ packages:
   leven@3.1.0:
     resolution: {integrity: sha512-qsda+H8jTaUaN/x5vzW2rzc+8Rw4TAQ/4KjB46IwK5VH+IlVeeeje/EoZRpiXvIqjFgK84QffqPztGI3VBLG1A==}
     engines: {node: '>=6'}
+
+  levenshtein-edit-distance@3.0.1:
+    resolution: {integrity: sha512-/qMCkZbrAF7jZP/voqlkfNrBtEn0TMdhCK7OEBh/zb39t/c3wCnTjwU1ZvrMfQ3OxB8sBQXIpWRMM6FiQJVG3g==}
+    hasBin: true
 
   libsql@0.5.29:
     resolution: {integrity: sha512-8lMP8iMgiBzzoNbAPQ59qdVcj6UaE/Vnm+fiwX4doX4Narook0a4GPKWBEv+CR8a1OwbfkgL18uBfBjWdF0Fzg==}
@@ -3875,6 +3890,8 @@ snapshots:
 
   commander@2.20.3: {}
 
+  commander@13.1.0: {}
+
   common-tags@1.8.2: {}
 
   content-disposition@0.5.4:
@@ -4427,6 +4444,11 @@ snapshots:
 
   js-base64@3.9.1: {}
 
+  js-mdict@6.0.6:
+    dependencies:
+      commander: 13.1.0
+      levenshtein-edit-distance: 3.0.1
+
   js-tokens@4.0.0: {}
 
   js-tokens@9.0.1: {}
@@ -4450,6 +4472,8 @@ snapshots:
   jsonpointer@5.0.1: {}
 
   leven@3.1.0: {}
+
+  levenshtein-edit-distance@3.0.1: {}
 
   libsql@0.5.29:
     dependencies:

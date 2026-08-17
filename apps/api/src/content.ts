@@ -90,6 +90,30 @@ export type WordAssessmentItem = {
 export class ContentModule {
   constructor(private readonly contentDirectory: string) {}
 
+  async firstPhaseReadiness(lessonIds: number[] = [1, 2, 3]) {
+    const lessons = await Promise.all(lessonIds.map(async (lessonId) => {
+      const issues: string[] = [];
+      try {
+        await this.loadLesson(lessonId);
+        const assessment = await this.loadAssessment(lessonId);
+        const dimensions = new Set(assessment.questions.map((question) => question.dimension));
+        for (const dimension of ["listening", "reading", "speaking", "writing"] as const) {
+          if (!dimensions.has(dimension)) issues.push(`missing-${dimension}`);
+        }
+        const wordItems = await this.wordAssessment(lessonId);
+        if (wordItems.length < 5) issues.push("insufficient-word-assessment-items");
+        const audio = await this.vocabularyAudioAvailability(wordItems.map((item) => item.term));
+        if (wordItems.some((item) => !audio.get(normalize(item.term))?.us)) {
+          issues.push("missing-word-audio");
+        }
+      } catch {
+        issues.push("content-unavailable");
+      }
+      return { lessonId, ready: issues.length === 0, issues };
+    }));
+    return { ready: lessons.every((lesson) => lesson.ready), lessons };
+  }
+
   async loadAssessment(lessonId: number): Promise<Assessment> {
     const filename = `lesson-${String(lessonId).padStart(2, "0")}.json`;
     const raw = await fs.readFile(path.join(this.contentDirectory, "assessments", filename), "utf8");
@@ -115,6 +139,12 @@ export class ContentModule {
       vocabularyCount: lesson.vocabulary.filter((item) => item.definition.trim()).length,
       sentenceCount: lesson.sentences.length,
     }));
+  }
+
+  async allVocabularyTerms() {
+    const raw = await fs.readFile(path.join(this.contentDirectory, "lessons.json"), "utf8");
+    const lessons = z.array(lessonSchema).parse(JSON.parse(raw));
+    return Array.from(new Set(lessons.flatMap((lesson) => lesson.vocabulary.map((item) => item.term))));
   }
 
   async publicLesson(lessonId: number): Promise<PublicLesson> {
@@ -165,6 +195,22 @@ export class ContentModule {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
       throw error;
     }
+  }
+
+  async vocabularyAudioAvailability(terms: string[]) {
+    const result = new Map<string, { us: boolean; uk: boolean }>();
+    try {
+      const raw = await fs.readFile(path.join(this.contentDirectory, "audio", "vocabulary", "index.json"), "utf8");
+      const library = vocabularyAudioSchema.parse(JSON.parse(raw));
+      for (const term of terms) {
+        const key = normalize(term);
+        const accents = library.entries[key]?.accents;
+        result.set(key, { us: Boolean(accents?.us), uk: Boolean(accents?.uk) });
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
+    return result;
   }
 
   async publicAssessment(lessonId: number): Promise<PublicAssessment> {

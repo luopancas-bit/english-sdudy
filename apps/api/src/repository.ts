@@ -1,9 +1,15 @@
 import crypto from "node:crypto";
-import { and, asc, desc, eq, gte, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
 import {
+  assessmentDrafts,
   attempts,
+  dictionaryEntries,
+  dictionaryConflicts,
+  dictionaryResources,
+  dictionarySources,
   invitations,
   lessonMastery,
+  pronunciations,
   reviewQueue,
   recordings,
   sessions,
@@ -166,6 +172,48 @@ export class LearningRepository {
     });
   }
 
+  getAssessmentDraft(userId: string, lessonId: number, kind: "formal" | "practice" | "review") {
+    return this.database.query.assessmentDrafts.findFirst({
+      where: and(
+        eq(assessmentDrafts.userId, userId),
+        eq(assessmentDrafts.lessonId, lessonId),
+        eq(assessmentDrafts.kind, kind),
+      ),
+    });
+  }
+
+  async saveAssessmentDraft(input: {
+    userId: string;
+    lessonId: number;
+    kind: "formal" | "practice" | "review";
+    currentIndex: number;
+    answers: Record<string, string>;
+    recordings: Record<string, string>;
+  }) {
+    const values = { ...input, updatedAt: new Date().toISOString() };
+    await this.database
+      .insert(assessmentDrafts)
+      .values(values)
+      .onConflictDoUpdate({
+        target: [assessmentDrafts.userId, assessmentDrafts.lessonId, assessmentDrafts.kind],
+        set: {
+          currentIndex: values.currentIndex,
+          answers: values.answers,
+          recordings: values.recordings,
+          updatedAt: values.updatedAt,
+        },
+      });
+    return values;
+  }
+
+  async deleteAssessmentDraft(userId: string, lessonId: number, kind: "formal" | "practice" | "review") {
+    await this.database.delete(assessmentDrafts).where(and(
+      eq(assessmentDrafts.userId, userId),
+      eq(assessmentDrafts.lessonId, lessonId),
+      eq(assessmentDrafts.kind, kind),
+    ));
+  }
+
   async attemptsFor(userId: string, lessonId: number): Promise<AssessmentAttempt[]> {
     const rows = await this.database.query.attempts.findMany({
       where: and(eq(attempts.userId, userId), eq(attempts.lessonId, lessonId)),
@@ -293,6 +341,137 @@ export class LearningRepository {
     });
   }
 
+  async allPersonalVocabularyTerms() {
+    const entries = await this.database.query.vocabularyEntries.findMany();
+    return Array.from(new Set(entries.map((entry) => entry.term)));
+  }
+
+  async dictionaryStats() {
+    const [sources, entries, rows, conflicts] = await Promise.all([
+      this.database.query.dictionarySources.findMany({ orderBy: [asc(dictionarySources.priority)] }),
+      this.database.query.dictionaryEntries.findMany(),
+      this.database.query.pronunciations.findMany(),
+      this.database.query.dictionaryConflicts.findMany(),
+    ]);
+    const activeSourceIds = new Set(sources.filter((source) => source.status === "active").map((source) => source.id));
+    const activeRows = rows.filter((row) => activeSourceIds.has(row.sourceId));
+    const us = new Set(activeRows.filter((row) => row.accent === "us" && row.ipa).map((row) => row.entryId));
+    const uk = new Set(activeRows.filter((row) => row.accent === "uk" && row.ipa).map((row) => row.entryId));
+    return {
+      summary: {
+        entries: entries.length,
+        us: us.size,
+        uk: uk.size,
+        dual: entries.filter((entry) => us.has(entry.id) && uk.has(entry.id)).length,
+        pending: entries.filter((entry) => entry.status === "pending").length,
+        ambiguous: entries.filter((entry) => entry.status === "ambiguous").length,
+        openConflicts: conflicts.filter((conflict) => conflict.status === "open").length,
+      },
+      sources: sources.map((source) => ({
+        id: source.id,
+        name: source.name,
+        version: source.version,
+        format: source.format,
+        status: source.status,
+        priority: source.priority,
+        importedAt: source.importedAt,
+      })),
+    };
+  }
+
+  async ensureDictionaryEntries(terms: string[]) {
+    const now = new Date().toISOString();
+    const unique = new Map<string, string>();
+    for (const term of terms) {
+      const normalized = normalizeDictionaryTerm(term);
+      if (normalized) unique.set(normalized, term.trim());
+    }
+    if (!unique.size) return;
+    await this.database
+      .insert(dictionaryEntries)
+      .values(Array.from(unique, ([normalizedTerm, term]) => ({
+        id: crypto.randomUUID(),
+        term,
+        normalizedTerm,
+        status: "pending" as const,
+        createdAt: now,
+        updatedAt: now,
+      })))
+      .onConflictDoNothing({ target: dictionaryEntries.normalizedTerm });
+  }
+
+  async pronunciationsForTerms(terms: string[]) {
+    const normalizedTerms = Array.from(new Set(terms.map(normalizeDictionaryTerm).filter(Boolean)));
+    if (!normalizedTerms.length) return [];
+    const entries = await this.database.query.dictionaryEntries.findMany({
+      where: inArray(dictionaryEntries.normalizedTerm, normalizedTerms),
+    });
+    if (!entries.length) return [];
+    const [rows, sources] = await Promise.all([
+      this.database.query.pronunciations.findMany({
+        where: inArray(pronunciations.entryId, entries.map((entry) => entry.id)),
+      }),
+      this.database.query.dictionarySources.findMany({
+        where: eq(dictionarySources.status, "active"),
+      }),
+    ]);
+    const priority = new Map(sources.map((source) => [source.id, source.priority]));
+    const resources = await this.database.query.dictionaryResources.findMany();
+    const resourceById = new Map(resources.map((resource) => [resource.id, resource]));
+    const activeRows = rows
+      .filter((row) => priority.has(row.sourceId))
+      .sort((left, right) =>
+        (priority.get(left.sourceId) ?? 1_000) - (priority.get(right.sourceId) ?? 1_000)
+        || Number(right.isPrimary) - Number(left.isPrimary)
+        || statusRank(left.status) - statusRank(right.status),
+      );
+    return entries.map((entry) => ({
+      id: entry.id,
+      term: entry.term,
+      normalizedTerm: entry.normalizedTerm,
+      status: entry.status,
+      pronunciations: {
+        us: activeRows
+          .filter((row) => row.entryId === entry.id && row.accent === "us")
+          .map((row) => ({ ...row, audioResource: row.audioResourceId ? resourceById.get(row.audioResourceId) ?? null : null })),
+        uk: activeRows
+          .filter((row) => row.entryId === entry.id && row.accent === "uk")
+          .map((row) => ({ ...row, audioResource: row.audioResourceId ? resourceById.get(row.audioResourceId) ?? null : null })),
+      },
+    }));
+  }
+
+  async dictionaryAudio(entryId: string, accent: "us" | "uk") {
+    const activeSources = await this.database.query.dictionarySources.findMany({
+      where: eq(dictionarySources.status, "active"),
+    });
+    const priority = new Map(activeSources.map((source) => [source.id, source.priority]));
+    const rows = await this.database.query.pronunciations.findMany({
+      where: and(
+        eq(pronunciations.entryId, entryId),
+        eq(pronunciations.accent, accent),
+        inArray(pronunciations.sourceId, activeSources.map((source) => source.id)),
+      ),
+      orderBy: [desc(pronunciations.isPrimary)],
+    });
+    const row = rows
+      .filter((candidate) => candidate.audioResourceId)
+      .sort((left, right) =>
+        (priority.get(left.sourceId) ?? 1_000) - (priority.get(right.sourceId) ?? 1_000)
+        || Number(right.isPrimary) - Number(left.isPrimary),
+      )[0];
+    if (!row?.audioResourceId) return null;
+    return this.database.query.dictionaryResources.findFirst({
+      where: eq(dictionaryResources.id, row.audioResourceId),
+    });
+  }
+
+  findDictionaryEntry(entryId: string) {
+    return this.database.query.dictionaryEntries.findFirst({
+      where: eq(dictionaryEntries.id, entryId),
+    });
+  }
+
   async saveVocabularyEntry(input: {
     userId: string;
     term: string;
@@ -322,6 +501,7 @@ export class LearningRepository {
           updatedAt: now,
         },
       });
+    await this.ensureDictionaryEntries([input.term]);
     return this.database.query.vocabularyEntries.findFirst({
       where: and(
         eq(vocabularyEntries.userId, input.userId),
@@ -618,4 +798,12 @@ export class LearningRepository {
     ]);
     return { attempts: attemptRows, mastery };
   }
+}
+
+function normalizeDictionaryTerm(term: string) {
+  return term.normalize("NFKC").trim().toLocaleLowerCase("en-US").replace(/\s+/g, " ");
+}
+
+function statusRank(status: "verified" | "pending" | "ambiguous") {
+  return status === "verified" ? 0 : status === "ambiguous" ? 1 : 2;
 }

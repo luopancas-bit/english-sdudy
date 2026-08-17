@@ -1,4 +1,4 @@
-import type { AccountSession, Assessment, AttemptResult, CourseMapData, DashboardData, LearningReportData, LessonContent, RecordingReceipt, ReviewCenterData, User, VocabularyData, VocabularyEntry, VocabularyInput, VocabularyTrainingInput, WordAssessment, WordAssessmentResult, WordMemoryChapter, WordMemoryStats, WordReviewResult, WordReviewsData } from "./types";
+import type { AccountSession, Assessment, AssessmentDraft, AttemptResult, CourseMapData, DashboardData, DictionaryStatusData, LearningReportData, LessonContent, RecordingReceipt, ReviewCenterData, User, VocabularyData, VocabularyEntry, VocabularyInput, VocabularyTrainingInput, WordAssessment, WordAssessmentResult, WordMemoryChapter, WordMemoryStats, WordReviewResult, WordReviewsData } from "./types";
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, {
@@ -51,6 +51,7 @@ export const api = {
   courseMap: () => request<CourseMapData>("/api/course-map"),
   learningReport: () => request<LearningReportData>("/api/learning-report"),
   vocabulary: () => request<VocabularyData>("/api/vocabulary"),
+  dictionaryStatus: () => request<DictionaryStatusData>("/api/dictionaries/status"),
   addVocabulary: (input: VocabularyInput) =>
     request<VocabularyEntry>("/api/vocabulary", {
       method: "POST",
@@ -104,6 +105,18 @@ export const api = {
   reviewCenter: () => request<ReviewCenterData>("/api/review-center"),
   lesson: (lessonId: number) => request<LessonContent>(`/api/lessons/${lessonId}`),
   assessment: (lessonId: number) => request<Assessment>(`/api/lessons/${lessonId}/assessment`),
+  assessmentDraft: (lessonId: number, kind: "formal" | "practice" | "review") =>
+    request<{ draft: AssessmentDraft | null }>(`/api/lessons/${lessonId}/assessment-draft?kind=${kind}`),
+  saveAssessmentDraft: (
+    lessonId: number,
+    kind: "formal" | "practice" | "review",
+    currentIndex: number,
+    answers: Record<string, string>,
+    recordings: Record<string, string>,
+  ) => request<{ draft: AssessmentDraft }>(`/api/lessons/${lessonId}/assessment-draft`, {
+    method: "PUT",
+    body: JSON.stringify({ kind, currentIndex, answers, recordings }),
+  }),
   uploadRecording: async (lessonId: number, questionId: string, blob: Blob) => {
     const response = await fetch(`/api/lessons/${lessonId}/recordings/${encodeURIComponent(questionId)}`, {
       method: "POST",

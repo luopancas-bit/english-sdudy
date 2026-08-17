@@ -30,6 +30,8 @@ describe("learning account flow", () => {
     await fs.mkdir(path.join(contentDirectory, "assessments"), { recursive: true });
     await fs.mkdir(path.join(contentDirectory, "audio", "vocabulary", "us"), { recursive: true });
     await fs.writeFile(path.join(contentDirectory, "audio", "vocabulary", "us", "a.m4a"), "word-audio");
+    await fs.mkdir(path.join(contentDirectory, "dictionaries", "resources", "test-ipa@1"), { recursive: true });
+    await fs.writeFile(path.join(contentDirectory, "dictionaries", "resources", "test-ipa@1", "synthetic-us.mp3"), "dict-audio");
     await fs.writeFile(path.join(contentDirectory, "audio", "vocabulary", "index.json"), JSON.stringify({
       version: 1,
       entries: {
@@ -62,6 +64,52 @@ describe("learning account flow", () => {
         vocabulary: [{ term: "synthetic", definition: "合成的" }],
         sentences: [{ id: `${lessonId}-1`, text: "A synthetic lesson.", cloze: "synthetic" }],
       }))),
+    );
+    await fs.mkdir(path.join(contentDirectory, "dictionaries", "published"), { recursive: true });
+    await fs.writeFile(
+      path.join(contentDirectory, "dictionaries", "published", "test-ipa@1.json"),
+      JSON.stringify({
+        schemaVersion: 1,
+        source: { id: "test-ipa", name: "测试音标", version: "1", format: "json", license: "test-only", priority: 10 },
+        entries: [{
+          key: "synthetic",
+          term: "synthetic",
+          definition: "合成的",
+          partOfSpeech: "adjective",
+          rawNotation: "US /sɪnˈθetɪk/; UK /sɪnˈθetɪk/",
+          pronunciations: [
+            { accent: "us", ipa: "sɪnˈθetɪk", rawPhonetic: "/sɪnˈθetɪk/", notationSystem: "ipa", status: "verified", primary: true, partOfSpeech: "adjective", audioResourceKey: "synthetic-us.mp3" },
+            { accent: "uk", ipa: "sɪnˈθetɪk", rawPhonetic: "/sɪnˈθetɪk/", notationSystem: "ipa", status: "verified", primary: true, partOfSpeech: "adjective" },
+          ],
+        }],
+        resources: [{
+          key: "synthetic-us.mp3",
+          path: "dictionaries/resources/test-ipa@1/synthetic-us.mp3",
+          kind: "audio",
+          mimeType: "audio/mpeg",
+          sha256: "0000000000000000000000000000000000000000000000000000000000000000",
+          byteSize: 10,
+        }],
+      }),
+    );
+    await fs.writeFile(
+      path.join(contentDirectory, "dictionaries", "published", "test-ipa-alternative@1.json"),
+      JSON.stringify({
+        schemaVersion: 1,
+        source: { id: "test-ipa-alternative", name: "测试备选音标", version: "1", format: "json", license: "test-only", priority: 20 },
+        entries: [{
+          key: "synthetic",
+          term: "synthetic",
+          definition: "冲突测试",
+          partOfSpeech: "adjective",
+          rawNotation: null,
+          pronunciations: [
+            { accent: "us", ipa: "sɪnˈθɛtɪk", rawPhonetic: null, notationSystem: "ipa", status: "verified", primary: true, partOfSpeech: "adjective" },
+            { accent: "uk", ipa: "sɪnˈθɛtɪk", rawPhonetic: null, notationSystem: "ipa", status: "verified", primary: true, partOfSpeech: "adjective" },
+          ],
+        }],
+        resources: [],
+      }),
     );
 
     const secret = "integration-test-secret-at-least-32-characters";
@@ -233,7 +281,7 @@ describe("learning account flow", () => {
 
     const payload = {
       kind: "formal",
-      answers: { l1: "A", r1: "B", s1: "speak clearly", w1: "computer" },
+      answers: { l1: "A", r1: "B", s1: "", w1: "computer" },
       recordings: { s1: "" },
     };
     const missingRecording = await app.inject({
@@ -245,6 +293,14 @@ describe("learning account flow", () => {
     expect(missingRecording.statusCode).toBe(400);
     expect(missingRecording.json()).toMatchObject({ error: "正式考核的跟读题必须完成录音" });
 
+    const emptyDraft = await app.inject({
+      method: "GET",
+      url: "/api/lessons/1/assessment-draft?kind=formal",
+      headers: { cookie },
+    });
+    expect(emptyDraft.statusCode).toBe(200);
+    expect(emptyDraft.json()).toEqual({ draft: null });
+
     const firstRecording = await app.inject({
       method: "POST",
       url: "/api/lessons/1/recordings/s1",
@@ -253,6 +309,61 @@ describe("learning account flow", () => {
     });
     expect(firstRecording.statusCode).toBe(201);
     payload.recordings.s1 = firstRecording.json().recordingId;
+
+    const invalidDraftRecording = await app.inject({
+      method: "PUT",
+      url: "/api/lessons/1/assessment-draft",
+      headers: { cookie },
+      payload: {
+        kind: "formal",
+        currentIndex: 2,
+        answers: { l1: "A", r1: "B" },
+        recordings: { s1: "f9d350d7-6fe9-42e4-a92f-11750f6cf6ba" },
+      },
+    });
+    expect(invalidDraftRecording.statusCode).toBe(400);
+    expect(invalidDraftRecording.json()).toMatchObject({ error: "草稿中的跟读录音无效" });
+
+    const savedDraft = await app.inject({
+      method: "PUT",
+      url: "/api/lessons/1/assessment-draft",
+      headers: { cookie },
+      payload: {
+        kind: "formal",
+        currentIndex: 2,
+        answers: { l1: "A", r1: "B" },
+        recordings: payload.recordings,
+      },
+    });
+    expect(savedDraft.statusCode).toBe(200);
+    expect(savedDraft.json().draft).toMatchObject({
+      lessonId: 1,
+      kind: "formal",
+      currentIndex: 2,
+      answers: { l1: "A", r1: "B" },
+      recordings: payload.recordings,
+    });
+
+    const crossDeviceLogin = await app.inject({
+      method: "POST",
+      url: "/api/auth/login",
+      headers: { "user-agent": "Synthetic second device" },
+      payload: { username: "learner_01", password: "a-new-secure-test-password" },
+    });
+    const crossDeviceSetCookie = crossDeviceLogin.headers["set-cookie"]!;
+    const crossDeviceCookie = (Array.isArray(crossDeviceSetCookie) ? crossDeviceSetCookie[0]! : crossDeviceSetCookie).split(";")[0]!;
+    const restoredDraft = await app.inject({
+      method: "GET",
+      url: "/api/lessons/1/assessment-draft?kind=formal",
+      headers: { cookie: crossDeviceCookie },
+    });
+    expect(restoredDraft.statusCode).toBe(200);
+    expect(restoredDraft.json().draft).toMatchObject({
+      currentIndex: 2,
+      answers: { l1: "A", r1: "B" },
+      recordings: payload.recordings,
+    });
+
     const first = await app.inject({
       method: "POST",
       url: "/api/lessons/1/attempts",
@@ -260,7 +371,18 @@ describe("learning account flow", () => {
       payload,
     });
     expect(first.statusCode).toBe(201);
-    expect(first.json()).toMatchObject({ countsTowardMastery: true, mastery: { score: 100 } });
+    expect(first.json()).toMatchObject({
+      countsTowardMastery: true,
+      scores: { speaking: 0 },
+      mastery: { score: 80 },
+    });
+    const clearedDraft = await app.inject({
+      method: "GET",
+      url: "/api/lessons/1/assessment-draft?kind=formal",
+      headers: { cookie: crossDeviceCookie },
+    });
+    expect(clearedDraft.statusCode).toBe(200);
+    expect(clearedDraft.json()).toEqual({ draft: null });
 
     const retry = await app.inject({
       method: "POST",
@@ -269,7 +391,7 @@ describe("learning account flow", () => {
       payload,
     });
     expect(retry.statusCode).toBe(201);
-    expect(retry.json()).toMatchObject({ countsTowardMastery: false, mastery: { score: 100 }, review: null });
+    expect(retry.json()).toMatchObject({ countsTowardMastery: false, mastery: { score: 80 }, review: null });
 
     const dashboard = await app.inject({ method: "GET", url: "/api/dashboard", headers: { cookie } });
     expect(dashboard.statusCode).toBe(200);
@@ -279,10 +401,10 @@ describe("learning account flow", () => {
       currentLesson: 2,
       studyStreak: 1,
       nextReview: { lessonId: 1, title: "合成课程" },
-      plan: { reviewMinutes: 0, weakMinutes: 0, newLessonMinutes: 30 },
+      plan: { reviewMinutes: 5, weakMinutes: 2, newLessonMinutes: 23 },
     });
     expect(dashboardBody.history).toHaveLength(3);
-    expect(dashboardBody.history[0]).toMatchObject({ lessonId: 1, title: "合成课程", score: 100 });
+    expect(dashboardBody.history[0]).toMatchObject({ lessonId: 1, title: "合成课程", score: 80 });
 
     const weakAttempt = await app.inject({
       method: "POST",
@@ -319,8 +441,11 @@ describe("learning account flow", () => {
     });
     expect(reviewCenter.statusCode).toBe(200);
     expect(reviewCenter.json()).toMatchObject({
-      due: [{ lessonId: 2, title: "第二合成课程", weakDimensions: ["listening", "reading", "speaking", "writing"] }],
-      upcoming: [{ lessonId: 1, title: "合成课程" }],
+      due: [
+        { lessonId: 2, title: "第二合成课程", weakDimensions: ["listening", "reading", "speaking", "writing"] },
+        { lessonId: 1, title: "合成课程", weakDimensions: ["speaking"] },
+      ],
+      upcoming: [],
     });
     expect(reviewCenter.json().wrongAnswers).toHaveLength(4);
     expect(reviewCenter.json().wrongAnswers[0]).toMatchObject({
@@ -341,10 +466,10 @@ describe("learning account flow", () => {
         totalLessons: 3,
         studiedLessons: 2,
         masteredLessons: 1,
-        averageScore: 50,
+        averageScore: 40,
       },
       lessons: [
-        { lessonId: 1, title: "合成课程", unlocked: true, state: "mastered", score: 100 },
+        { lessonId: 1, title: "合成课程", unlocked: true, state: "review-due", score: 80 },
         { lessonId: 2, title: "第二合成课程", unlocked: true, state: "review-due", score: 0 },
         { lessonId: 3, title: "第三合成课程", unlocked: true, state: "ready", score: null },
       ],
@@ -364,6 +489,40 @@ describe("learning account flow", () => {
       ],
     });
 
+    const lessonWithPronunciation = await app.inject({
+      method: "GET",
+      url: "/api/lessons/1",
+      headers: { cookie },
+    });
+    expect(lessonWithPronunciation.statusCode).toBe(200);
+    expect(lessonWithPronunciation.json().vocabulary[0]).toMatchObject({
+      term: "synthetic",
+      pronunciation: {
+        status: "ambiguous",
+        us: {
+          ipa: "sɪnˈθetɪk",
+          alternatives: [{ ipa: "sɪnˈθɛtɪk", partOfSpeech: "adjective" }],
+          audioUrl: expect.stringMatching(/^\/api\/dictionary\/entries\/[0-9a-f-]+\/audio\/us$/),
+        },
+        uk: { ipa: "sɪnˈθetɪk", alternatives: [{ ipa: "sɪnˈθɛtɪk", partOfSpeech: "adjective" }], audioUrl: null },
+      },
+    });
+    const dictionaryAudioUrl = lessonWithPronunciation.json().vocabulary[0].pronunciation.us.audioUrl;
+    const dictionaryAudio = await app.inject({ method: "GET", url: dictionaryAudioUrl, headers: { cookie } });
+    expect(dictionaryAudio.statusCode).toBe(200);
+    expect(dictionaryAudio.headers["content-type"]).toContain("audio/mpeg");
+    expect(dictionaryAudio.body).toBe("dict-audio");
+
+    const dictionaryStatus = await app.inject({ method: "GET", url: "/api/dictionaries/status", headers: { cookie } });
+    expect(dictionaryStatus.statusCode).toBe(200);
+    expect(dictionaryStatus.json()).toMatchObject({
+      summary: { entries: 1, us: 1, uk: 1, dual: 1, pending: 0, ambiguous: 1, openConflicts: 2 },
+      sources: [
+        { id: "test-ipa@1", status: "active", priority: 10 },
+        { id: "test-ipa-alternative@1", status: "active", priority: 20 },
+      ],
+    });
+
     const report = await app.inject({
       method: "GET",
       url: "/api/learning-report",
@@ -375,11 +534,11 @@ describe("learning account flow", () => {
         totalAttempts: 4,
         studiedDays: 1,
         studyStreak: 1,
-        averageScore: 75,
+        averageScore: 65,
       },
-      dimensions: { listening: 75, reading: 75, speaking: 75, writing: 75 },
+      dimensions: { listening: 75, reading: 75, speaking: 25, writing: 75 },
       lessons: [
-        { lessonId: 1, title: "合成课程", score: 100 },
+        { lessonId: 1, title: "合成课程", score: 80 },
         { lessonId: 2, title: "第二合成课程", score: 0 },
       ],
     });
@@ -400,6 +559,7 @@ describe("learning account flow", () => {
       term: "Computer",
       meaning: "电脑",
       status: "learning",
+      pronunciation: { status: "pending", us: { ipa: null }, uk: { ipa: null } },
     });
 
     const vocabularyList = await app.inject({

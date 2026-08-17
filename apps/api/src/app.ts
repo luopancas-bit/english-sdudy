@@ -16,6 +16,7 @@ import {
 import { z } from "zod";
 import { loadConfig, type AppConfig } from "./config.js";
 import { ContentModule } from "./content.js";
+import { syncPublishedDictionaries } from "./dictionary-import.js";
 import { LearningRepository } from "./repository.js";
 import { hashPassword, hashToken, newOpaqueToken, normalizeUsername, verifyPassword } from "./security.js";
 
@@ -54,6 +55,14 @@ const submissionSchema = z.object({
   recordings: z.record(z.string(), z.string().uuid()).default({}),
 });
 
+const assessmentKindSchema = z.enum(["formal", "practice", "review"]);
+const assessmentDraftSchema = z.object({
+  kind: assessmentKindSchema,
+  currentIndex: z.number().int().min(0).max(500),
+  answers: z.record(z.string().min(1).max(80), z.string().max(5_000)).default({}),
+  recordings: z.record(z.string().min(1).max(80), z.string().uuid()).default({}),
+});
+
 const vocabularySchema = z.object({
   term: z.string().trim().min(1).max(80),
   meaning: z.string().trim().min(1).max(160),
@@ -67,6 +76,11 @@ const vocabularyStatusSchema = z.object({
 
 const vocabularyParamsSchema = z.object({
   entryId: z.string().uuid(),
+});
+
+const dictionaryAudioParamsSchema = z.object({
+  entryId: z.string().uuid(),
+  accent: z.enum(["us", "uk"]),
 });
 
 const vocabularyTrainingSchema = z.object({
@@ -106,8 +120,27 @@ export async function createApp(
   const app = Fastify({ logger: true, bodyLimit: 1_000_000 });
   const authAttempts = new Map<string, { count: number; resetAt: number }>();
   await migrate(database);
+  await syncPublishedDictionaries(database, config.CONTENT_DIR);
   const repository = new LearningRepository(database);
   const content = new ContentModule(config.CONTENT_DIR);
+  const [courseTerms, personalTerms] = await Promise.all([
+    content.allVocabularyTerms(),
+    repository.allPersonalVocabularyTerms(),
+  ]);
+  await repository.ensureDictionaryEntries([...courseTerms, ...personalTerms]);
+  const loadPronunciations = async (terms: string[]) => {
+    const lookupTerms = pronunciationLookupTerms(terms);
+    await repository.ensureDictionaryEntries(lookupTerms);
+    const [records, audio] = await Promise.all([
+      repository.pronunciationsForTerms(lookupTerms),
+      content.vocabularyAudioAvailability(lookupTerms),
+    ]);
+    const byTerm = new Map(records.map((record) => [record.normalizedTerm, record]));
+    return new Map(terms.map((term) => [
+      normalizeVocabularyTerm(term),
+      publicPronunciation(term, byTerm, audio),
+    ]));
+  };
   app.addContentTypeParser(
     ["audio/webm", "audio/mp4", "audio/ogg", "application/octet-stream"],
     { parseAs: "buffer", bodyLimit: 10_000_000 },
@@ -195,14 +228,16 @@ export async function createApp(
     current.count += 1;
   }
 
-  app.get("/api/health", async () => {
-    let contentReady = true;
-    try {
-      await content.loadAssessment(1);
-    } catch {
-      contentReady = false;
-    }
-    return { ok: true, service: "zhuguang-english-v2", database: true, content: contentReady };
+  app.get("/api/health", async (_request, reply) => {
+    const firstPhase = await content.firstPhaseReadiness();
+    if (!firstPhase.ready) reply.code(503);
+    return {
+      ok: firstPhase.ready,
+      service: "zhuguang-english-v2",
+      database: true,
+      content: firstPhase.ready,
+      firstPhase,
+    };
   });
 
   app.post("/api/auth/register", { preHandler: limitAuthentication }, async (request, reply) => {
@@ -530,7 +565,11 @@ export async function createApp(
     const user = await requireUser(request, reply);
     if (!user) return;
     const entries = await repository.listVocabulary(user.id);
-    return vocabularyResponse(entries.map(publicVocabularyEntry));
+    const pronunciationByTerm = await loadPronunciations(entries.map((entry) => entry.term));
+    return vocabularyResponse(entries.map((entry) => publicVocabularyEntry(
+      entry,
+      pronunciationByTerm.get(normalizeVocabularyTerm(entry.term)),
+    )));
   });
 
   app.post("/api/vocabulary", async (request, reply) => {
@@ -545,7 +584,12 @@ export async function createApp(
       example: body.example || null,
       lessonId: body.lessonId ?? null,
     });
-    return entry ? reply.code(201).send(publicVocabularyEntry(entry)) : reply.code(500).send({ error: "生词保存失败" });
+    if (!entry) return reply.code(500).send({ error: "生词保存失败" });
+    const pronunciationByTerm = await loadPronunciations([entry.term]);
+    return reply.code(201).send(publicVocabularyEntry(
+      entry,
+      pronunciationByTerm.get(normalizeVocabularyTerm(entry.term)),
+    ));
   });
 
   app.patch("/api/vocabulary/:entryId", async (request, reply) => {
@@ -557,7 +601,9 @@ export async function createApp(
       return reply.code(409).send({ error: "单词必须通过正式考核才能标记为已掌握" });
     }
     const entry = await repository.updateVocabularyStatus(user.id, entryId, status);
-    return entry ? publicVocabularyEntry(entry) : reply.code(404).send({ error: "生词不存在" });
+    if (!entry) return reply.code(404).send({ error: "生词不存在" });
+    const pronunciationByTerm = await loadPronunciations([entry.term]);
+    return publicVocabularyEntry(entry, pronunciationByTerm.get(normalizeVocabularyTerm(entry.term)));
   });
 
   app.post("/api/vocabulary/training-attempts", async (request, reply) => {
@@ -574,6 +620,12 @@ export async function createApp(
     const user = await requireUser(request, reply);
     if (!user) return;
     return { chapters: await content.wordMemoryChapters() };
+  });
+
+  app.get("/api/dictionaries/status", async (request, reply) => {
+    const user = await requireUser(request, reply);
+    if (!user) return;
+    return repository.dictionaryStats();
   });
 
   app.get("/api/word-memory/stats", async (request, reply) => {
@@ -599,9 +651,23 @@ export async function createApp(
         } : null,
       };
     };
+    const [due, upcoming] = await Promise.all([
+      Promise.all(reviews.due.map(withTask)),
+      Promise.all(reviews.upcoming.map(withTask)),
+    ]);
+    const pronunciationByTerm = await loadPronunciations(
+      [...due, ...upcoming].filter((review) => review.task).map((review) => review.normalizedTerm),
+    );
+    const attachPronunciation = <T extends { normalizedTerm: string; task: Record<string, unknown> | null }>(review: T) => ({
+      ...review,
+      task: review.task ? {
+        ...review.task,
+        pronunciation: pronunciationByTerm.get(review.normalizedTerm),
+      } : null,
+    });
     return {
-      due: await Promise.all(reviews.due.map(withTask)),
-      upcoming: await Promise.all(reviews.upcoming.map(withTask)),
+      due: due.map(attachPronunciation),
+      upcoming: upcoming.map(attachPronunciation),
       history: reviews.history,
     };
   });
@@ -643,12 +709,14 @@ export async function createApp(
     const lessonId = z.coerce.number().int().min(1).max(40)
       .parse((request.params as { lessonId: string }).lessonId);
     const items = await content.wordAssessment(lessonId);
+    const pronunciationByTerm = await loadPronunciations(items.map((item) => item.term));
     return {
       lessonId,
       passingScore: 80,
       items: items.map(({ meaning, sentence, ...item }) => ({
         ...item,
         spellingPrompt: meaning,
+        pronunciation: pronunciationByTerm.get(normalizeVocabularyTerm(item.term)),
       })),
     };
   });
@@ -714,7 +782,34 @@ export async function createApp(
     if (!user) return;
     const lessonId = z.coerce.number().int().min(1).max(40)
       .parse((request.params as { lessonId: string }).lessonId);
-    return content.publicLesson(lessonId);
+    const lesson = await content.publicLesson(lessonId);
+    const pronunciationByTerm = await loadPronunciations(lesson.vocabulary.map((entry) => entry.term));
+    return {
+      ...lesson,
+      vocabulary: lesson.vocabulary.map((entry) => ({
+        ...entry,
+        pronunciation: pronunciationByTerm.get(normalizeVocabularyTerm(entry.term)),
+      })),
+    };
+  });
+
+  app.get("/api/dictionary/entries/:entryId/audio/:accent", async (request, reply) => {
+    const user = await requireUser(request, reply);
+    if (!user) return;
+   const params = dictionaryAudioParamsSchema.parse(request.params);
+   const entry = await repository.findDictionaryEntry(params.entryId);
+   if (!entry) return reply.code(404).send({ error: "音标词条不存在" });
+    const dictionaryAudio = await repository.dictionaryAudio(params.entryId, params.accent);
+    if (dictionaryAudio) {
+      const contentRoot = path.resolve(config.CONTENT_DIR);
+      const audioPath = path.resolve(contentRoot, dictionaryAudio.storagePath);
+      if (!audioPath.startsWith(contentRoot + path.sep)) return reply.code(404).send({ error: "音频资源路径无效" });
+      const data = await fs.readFile(audioPath);
+      return reply.type(dictionaryAudio.mimeType).header("Cache-Control", "private, max-age=86400").send(data);
+    }
+   const audio = await content.vocabularyAudio(entry.term, params.accent);
+    if (!audio) return reply.code(404).send({ error: "该口音音频待补全" });
+    return reply.type(audio.mimeType).header("Cache-Control", "private, max-age=86400").send(audio.data);
   });
 
   app.get("/api/lessons/:lessonId/audio/:accent", async (request, reply) => {
@@ -755,6 +850,43 @@ export async function createApp(
     const audio = await content.assessmentWordAudio(params.lessonId, params.questionId, params.accent);
     if (!audio) return reply.code(404).send({ error: "本题单词音频尚未部署" });
     return reply.type(audio.mimeType).header("Cache-Control", "private, max-age=86400").send(audio.data);
+  });
+
+  app.get("/api/lessons/:lessonId/assessment-draft", async (request, reply) => {
+    const user = await requireUser(request, reply);
+    if (!user) return;
+    const lessonId = z.coerce.number().int().min(1).max(40).parse((request.params as { lessonId: string }).lessonId);
+    const kind = assessmentKindSchema.parse((request.query as { kind?: string }).kind ?? "formal");
+    const draft = await repository.getAssessmentDraft(user.id, lessonId, kind);
+    return { draft: draft ?? null };
+  });
+
+  app.put("/api/lessons/:lessonId/assessment-draft", async (request, reply) => {
+    const user = await requireUser(request, reply);
+    if (!user) return;
+    const lessonId = z.coerce.number().int().min(1).max(40).parse((request.params as { lessonId: string }).lessonId);
+    const body = assessmentDraftSchema.parse(request.body);
+    const assessment = await content.loadAssessment(lessonId);
+    const questions = new Map(assessment.questions.map((question) => [question.id, question]));
+    if (Object.keys(body.answers).some((questionId) => !questions.has(questionId))) {
+      return reply.code(400).send({ error: "草稿包含不属于本课的题目" });
+    }
+    for (const [questionId, recordingId] of Object.entries(body.recordings)) {
+      const question = questions.get(questionId);
+      const recording = await repository.findRecording(user.id, recordingId);
+      if (!question || question.type !== "speech" || !recording || recording.lessonId !== lessonId || recording.questionId !== questionId) {
+        return reply.code(400).send({ error: "草稿中的跟读录音无效" });
+      }
+    }
+    const draft = await repository.saveAssessmentDraft({
+      userId: user.id,
+      lessonId,
+      kind: body.kind,
+      currentIndex: Math.min(body.currentIndex, Math.max(assessment.questions.length - 1, 0)),
+      answers: body.answers,
+      recordings: body.recordings,
+    });
+    return { draft };
   });
 
   app.post("/api/lessons/:lessonId/recordings/:questionId", async (request, reply) => {
@@ -835,6 +967,7 @@ export async function createApp(
       }
     }
     await repository.saveWrongAnswers(user.id, lessonId, graded.details);
+    await repository.deleteAssessmentDraft(user.id, lessonId, body.kind);
     return reply.code(201).send({
       attemptId,
       scores,
@@ -903,7 +1036,7 @@ function publicVocabularyEntry(entry: {
   status: "learning" | "mastered";
   createdAt: string;
   updatedAt: string;
-}) {
+}, pronunciation?: PublicPronunciation) {
   return {
     id: entry.id,
     term: entry.term,
@@ -913,7 +1046,94 @@ function publicVocabularyEntry(entry: {
     status: entry.status,
     createdAt: entry.createdAt,
     updatedAt: entry.updatedAt,
+    pronunciation: pronunciation ?? emptyPronunciation(),
   };
+}
+
+type PronunciationRecord = Awaited<ReturnType<LearningRepository["pronunciationsForTerms"]>>[number];
+type PronunciationAudioMap = Awaited<ReturnType<ContentModule["vocabularyAudioAvailability"]>>;
+type AccentPronunciation = {
+  ipa: string | null;
+  alternatives: Array<{ ipa: string; partOfSpeech: string | null }>;
+  audioUrl: string | null;
+};
+type PublicPronunciation = {
+  status: "verified" | "pending" | "ambiguous";
+  us: AccentPronunciation;
+  uk: AccentPronunciation;
+  parts: Array<{
+    term: string;
+    status: "verified" | "pending" | "ambiguous";
+    us: AccentPronunciation;
+    uk: AccentPronunciation;
+  }>;
+};
+
+function publicPronunciation(
+  term: string,
+  byTerm: Map<string, PronunciationRecord>,
+  audio: PronunciationAudioMap,
+): PublicPronunciation {
+  const normalized = normalizeVocabularyTerm(term);
+  const record = byTerm.get(normalized);
+  const us = publicAccent(record, "us", audio.get(normalized)?.us ?? false);
+  const uk = publicAccent(record, "uk", audio.get(normalized)?.uk ?? false);
+  const complete = Boolean(us.ipa && uk.ipa);
+  const parts = complete ? [] : splitPronunciationParts(term).flatMap((part) => {
+    const partNormalized = normalizeVocabularyTerm(part);
+    const partRecord = byTerm.get(partNormalized);
+    if (!partRecord) return [];
+    return [{
+      term: part,
+      status: pronunciationStatus(partRecord),
+      us: publicAccent(partRecord, "us", audio.get(partNormalized)?.us ?? false),
+      uk: publicAccent(partRecord, "uk", audio.get(partNormalized)?.uk ?? false),
+    }];
+  });
+  return {
+    status: pronunciationStatus(record),
+    us,
+    uk,
+    parts,
+  };
+}
+
+function publicAccent(record: PronunciationRecord | undefined, accent: "us" | "uk", hasAudio: boolean): AccentPronunciation {
+  const rows = record?.pronunciations[accent].filter((row) => row.ipa) ?? [];
+  const [primary, ...alternatives] = rows;
+  const audioRow = rows.find((row) => row.audioResource);
+  return {
+    ipa: primary?.ipa ?? null,
+    alternatives: alternatives
+      .filter((row, index, values) => row.ipa !== primary?.ipa && values.findIndex((candidate) => candidate.ipa === row.ipa) === index)
+      .map((row) => ({ ipa: row.ipa!, partOfSpeech: row.partOfSpeech })),
+    audioUrl: (audioRow || hasAudio) && record ? `/api/dictionary/entries/${record.id}/audio/${accent}` : null,
+  };
+}
+
+function pronunciationStatus(record: PronunciationRecord | undefined): "verified" | "pending" | "ambiguous" {
+  if (!record) return "pending";
+  if (record.status === "ambiguous") return "ambiguous";
+  const us = record.pronunciations.us.filter((row) => row.ipa);
+  const uk = record.pronunciations.uk.filter((row) => row.ipa);
+  const rows = [...us, ...uk];
+  if (rows.some((row) => row.status === "ambiguous")) return "ambiguous";
+  if (!us.length || !uk.length) return "pending";
+  return rows.every((row) => row.status === "verified") ? "verified" : "pending";
+}
+
+function emptyPronunciation(): PublicPronunciation {
+  const accent = (): AccentPronunciation => ({ ipa: null, alternatives: [], audioUrl: null });
+  return { status: "pending", us: accent(), uk: accent(), parts: [] };
+}
+
+function pronunciationLookupTerms(terms: string[]) {
+  return Array.from(new Set(terms.flatMap((term) => [term, ...splitPronunciationParts(term)])));
+}
+
+function splitPronunciationParts(term: string) {
+  const matches = term.match(/[A-Za-z]+(?:['’-][A-Za-z]+)*/g) ?? [];
+  return matches.length > 1 ? matches : [];
 }
 
 function vocabularyResponse<T extends { status: string }>(entries: T[]) {

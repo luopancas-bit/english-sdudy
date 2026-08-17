@@ -326,8 +326,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .speech-recorder > button.recording { color: #fff; border-color: #a84132; background: #a84132; }
 .speech-recorder audio { width: 100%; height: 36px; }
 .speech-recorder > span { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); font-size: 12px; }
-.speech-answer label { display: grid; gap: 8px; color: var(--muted); font-size: 13px; }
-.speech-answer textarea { margin: 0; }
+.speech-evidence { display: grid; gap: 4px; padding: 13px 15px; border: 1px solid #d8e2dc; background: #f2f6f3; }
+.speech-evidence strong { color: var(--forest); font-size: 14px; }
+.speech-evidence span { color: var(--muted); font-size: 12px; }
 .speech-answer > p { margin: 0; display: flex; align-items: flex-start; gap: 7px; color: var(--muted); font-size: 12px; line-height: 1.6; }
 .speech-answer > p svg { flex: 0 0 auto; margin-top: 2px; }
 .question-sheet footer { margin-top: auto; display: flex; align-items: center; justify-content: space-between; gap: 20px; border-top: 1px solid var(--line); padding-top: 24px; }
@@ -472,6 +473,19 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .profile-actions .primary-button { padding: 0 24px; }
 .profile-actions span { color: var(--muted); font-size: 13px; }
 .account-security { margin-top: 52px; padding-top: 34px; border-top: 1px solid var(--line); }
+.dictionary-status-panel { margin-top: 52px; padding-top: 34px; border-top: 1px solid var(--line); }
+.dictionary-status-loading { display: flex; align-items: center; gap: 8px; color: var(--muted); }
+.dictionary-status-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 1px solid var(--line); background: #fff; }
+.dictionary-status-summary > span { display: grid; gap: 6px; min-height: 86px; padding: 17px; align-content: center; }
+.dictionary-status-summary > span + span { border-left: 1px solid var(--line); }
+.dictionary-status-summary small { color: var(--muted); }
+.dictionary-status-summary strong { font: 600 25px "Noto Serif SC", serif; color: var(--forest); }
+.dictionary-source-list { display: grid; gap: 10px; margin-top: 16px; }
+.dictionary-source-list article { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 16px; border: 1px solid var(--line); background: #fff; }
+.dictionary-source-list article div { display: grid; gap: 4px; }
+.dictionary-source-list article small { color: var(--muted); }
+.dictionary-source-list article > span { color: var(--forest); font-size: 12px; font-weight: 700; }
+.dictionary-source-list > p { margin: 0; padding: 16px; color: var(--muted); border: 1px dashed var(--line); }
 .security-heading { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 26px; }
 .security-heading > svg { color: var(--gold); margin-top: 3px; }
 .security-heading h2 { margin: 0 0 6px; font: 600 24px "Noto Serif SC", serif; }
@@ -864,6 +878,64 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .vocabulary-card header { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 .vocabulary-card h3 { margin: 0; font: 600 24px "Noto Serif SC", serif; color: var(--forest); }
 .vocabulary-card header span { color: var(--muted); font-size: 12px; }
+.pronunciation-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px 14px;
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.pronunciation-line.compact { margin-top: 3px; gap: 5px 10px; font-size: 12px; }
+.pronunciation-accent { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.pronunciation-accent > .pronunciation-play {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  width: auto;
+  min-width: 0;
+  min-height: 38px;
+  padding: 4px 9px 4px 4px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--forest);
+  background: #fff;
+  cursor: pointer;
+}
+.pronunciation-accent > .pronunciation-play:hover,
+.pronunciation-accent > .pronunciation-play.playing { border-color: var(--forest); background: #f1f6f2; }
+.pronunciation-accent > .pronunciation-play:focus-visible { outline: 3px solid rgba(27, 83, 67, .2); outline-offset: 2px; }
+.pronunciation-accent > .pronunciation-play:disabled { color: #aaa; background: #f4f4f2; cursor: not-allowed; }
+.pronunciation-play > span {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  color: #fff;
+  background: var(--forest);
+  font-size: 11px;
+  font-weight: 700;
+}
+.pronunciation-play:disabled > span { background: #929792; }
+.pronunciation-play > strong {
+  min-width: 0;
+  color: var(--ink);
+  font-family: "Noto Sans", "Arial Unicode MS", sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.pronunciation-play > strong.pending { color: var(--muted); font-size: 12px; font-weight: 400; }
+.pronunciation-accent details { position: relative; }
+.pronunciation-accent summary,
+.pronunciation-parts summary { color: var(--forest); cursor: pointer; font-size: 12px; }
+.pronunciation-accent details small { display: block; padding: 3px 0 0 10px; white-space: nowrap; }
+.pronunciation-parts { flex-basis: 100%; }
+.pronunciation-parts > div { display: flex; flex-wrap: wrap; gap: 5px 12px; padding: 5px 0 0 8px; }
+.pronunciation-parts > div strong { min-width: 90px; color: var(--ink); }
+.pronunciation-note { flex-basis: 100%; color: #986b18; }
 .vocabulary-card .meaning { margin: 8px 0; font-weight: 600; }
 .vocabulary-card blockquote {
   margin: 12px 0 0;
@@ -1439,6 +1511,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   .result-dimensions > div:nth-child(4) { border-top: 1px solid var(--line); }
   .profile-heading { align-items: flex-start; }
   .profile-settings > .profile-form { grid-template-columns: 1fr; }
+  .dictionary-status-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dictionary-status-summary > span + span { border-left: 0; }
+  .dictionary-status-summary > span:nth-child(even) { border-left: 1px solid var(--line); }
+  .dictionary-status-summary > span:nth-child(n+3) { border-top: 1px solid var(--line); }
   .profile-actions { grid-column: auto; align-items: stretch; flex-direction: column; }
   .profile-actions .primary-button { width: 100%; }
   .password-form { grid-template-columns: 1fr; padding: 20px; }
@@ -1502,6 +1578,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   .vocabulary-filters { overflow-x: auto; }
   .vocabulary-card { grid-template-columns: 1fr; }
   .vocabulary-card button { width: 100%; justify-content: center; }
+  .pronunciation-accent > .pronunciation-play { width: auto; min-width: 0; min-height: 44px; }
+  .pronunciation-line { align-items: flex-start; gap: 8px 12px; }
   .word-memory-hero { min-height: 0; padding: 26px 20px; grid-template-columns: 1fr; gap: 24px; }
   .word-memory, .word-memory-hero, .word-memory-layout, .chapter-picker, .word-memory-content { min-width: 0; max-width: 100%; }
   .word-memory { overflow: hidden; }

@@ -3,6 +3,7 @@ import { ArrowLeft, CheckCircle2, Keyboard, RotateCcw } from "lucide-react";
 import { evaluateTypingInput } from "@zhuguang/domain";
 import { api } from "../../api";
 import type { TypingTrainingEntry } from "../../types";
+import { PronunciationLine } from "./PronunciationLine";
 
 export function QwertyTraining({
   entries,
@@ -128,6 +129,7 @@ export function QwertyTraining({
             );
           })}
         </div>
+        <PronunciationLine pronunciation={current.pronunciation} />
 
         <label className={`typing-input ${evaluation.hasError ? "has-error" : evaluation.isComplete ? "is-complete" : ""}`}>
           <input

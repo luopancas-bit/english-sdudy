@@ -1,0 +1,13 @@
+{
+  "notationSystem": "ipa",
+  "trusted": false,
+  "usPatterns": [
+    "class=[\"'][^\"']*phon-us[^\"']*[\"'][^>]*>([\\s\\S]*?)</"
+  ],
+  "ukPatterns": [
+    "class=[\"'][^\"']*phon-gb[^\"']*[\"'][^>]*>([\\s\\S]*?)</"
+  ],
+  "partOfSpeechPatterns": [
+    "class=[\"'][^\"']*pos[^\"']*[\"'][^>]*>([\\s\\S]*?)</"
+  ]
+}

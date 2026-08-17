@@ -1,0 +1,13 @@
+{
+  "notationSystem": "ipa",
+  "trusted": true,
+  "usPatterns": [
+    "geo=[\"']n_am[\"'][^>]*>[\\s\\S]*?<span[^>]*class=[\"']phon[\"'][^>]*>([\\s\\S]*?)</span><a"
+  ],
+  "ukPatterns": [
+    "geo=[\"']br[\"'][^>]*>[\\s\\S]*?<span[^>]*class=[\"']phon[\"'][^>]*>([\\s\\S]*?)</span><a"
+  ],
+  "partOfSpeechPatterns": [
+    "class=[\"']pos[\"'][^>]*>([\\s\\S]*?)</span>"
+  ]
+}

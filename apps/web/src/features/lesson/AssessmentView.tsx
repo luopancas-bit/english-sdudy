@@ -38,20 +38,89 @@ export function AssessmentView({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<AttemptResult | null>(null);
+  const [syncStatus, setSyncStatus] = useState<"idle" | "restored" | "saving" | "saved" | "error">("idle");
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveChainRef = useRef<Promise<unknown>>(Promise.resolve());
+  const mountedRef = useRef(true);
 
   useEffect(() => {
-    if (!demo) api.assessment(lessonId).then(setAssessment);
-  }, [demo, lessonId]);
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (demo) return;
+    let active = true;
+    setAssessment(null);
+    setIndex(0);
+    setAnswers({});
+    setRecordings({});
+    setSyncStatus("idle");
+    void Promise.all([api.assessment(lessonId), api.assessmentDraft(lessonId, kind)])
+      .then(([nextAssessment, { draft }]) => {
+        if (!active) return;
+        setAssessment(nextAssessment);
+        if (draft) {
+          setIndex(draft.currentIndex);
+          setAnswers(draft.answers);
+          setRecordings(draft.recordings);
+          setSyncStatus("restored");
+        }
+      })
+      .catch((reason) => {
+        if (active) setError(reason instanceof Error ? reason.message : "考核加载失败，请稍后重试");
+      });
+    return () => { active = false; };
+  }, [demo, kind, lessonId]);
+
+  function queueDraftSave(
+    nextIndex: number,
+    nextAnswers: Record<string, string>,
+    nextRecordings: Record<string, string>,
+    delay = 0,
+  ) {
+    if (demo) return;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    const save = () => {
+      if (mountedRef.current) setSyncStatus("saving");
+      saveChainRef.current = saveChainRef.current
+        .catch(() => undefined)
+        .then(() => api.saveAssessmentDraft(lessonId, kind, nextIndex, nextAnswers, nextRecordings))
+        .then(() => { if (mountedRef.current) setSyncStatus("saved"); })
+        .catch(() => { if (mountedRef.current) setSyncStatus("error"); });
+    };
+    saveTimerRef.current = delay ? setTimeout(save, delay) : null;
+    if (!delay) save();
+  }
+
+  function updateAnswer(questionId: string, value: string, delay = 0) {
+    setAnswers((current) => {
+      const next = { ...current, [questionId]: value };
+      queueDraftSave(index, next, recordings, delay);
+      return next;
+    });
+  }
+
+  function closeAssessment() {
+    queueDraftSave(index, answers, recordings);
+    onClose();
+  }
 
   if (!assessment) return <div className="loading-screen">正在准备考核…</div>;
   const question = assessment.questions[index]!;
   const Icon = dimensionIcons[question.dimension];
   const finalQuestion = index === assessment.questions.length - 1;
   const answer = answers[question.id] ?? "";
+  const canContinue = question.type === "speech" ? Boolean(recordings[question.id]) : Boolean(answer.trim());
 
   async function continueAssessment() {
     if (!finalQuestion) {
-      setIndex((value) => value + 1);
+      const nextIndex = index + 1;
+      setIndex(nextIndex);
+      queueDraftSave(nextIndex, answers, recordings);
       return;
     }
     if (demo) {
@@ -84,7 +153,7 @@ export function AssessmentView({
   return (
     <main className="assessment-page">
       <header>
-        <button onClick={onClose}><ArrowLeft size={19} /><span className="desktop-back-label">返回{kind === "review" ? "复习中心" : "今日学习"}</span><span className="mobile-back-label">返回</span></button>
+        <button onClick={closeAssessment}><ArrowLeft size={19} /><span className="desktop-back-label">返回{kind === "review" ? "复习中心" : "今日学习"}</span><span className="mobile-back-label">返回</span></button>
         <div><strong>第 {String(assessment.lessonId).padStart(2, "0")} 课</strong><span>{assessment.title}</span></div>
         <span>{index + 1} / {assessment.questions.length}</span>
       </header>
@@ -93,32 +162,42 @@ export function AssessmentView({
         <div className="question-kind"><Icon size={22} /><span>{dimensionNames[question.dimension]}考核</span></div>
         <h1>{question.prompt}</h1>
         <p>{kind === "review" ? "完成整组复习后统一显示结果，本题不会即时透露答案。" : "正式考核完成整组后统一显示结果，本题不会即时透露答案。"}</p>
-        {question.audioUrl && <QuestionAudio url={question.audioUrl} mode={question.audioMode} start={question.audioStart} end={question.audioEnd} />}
+        {question.audioUrl && <QuestionAudio key={question.id} url={question.audioUrl} mode={question.audioMode} start={question.audioStart} end={question.audioEnd} />}
         {question.options ? (
           <div className="answer-options">
             {question.options.map((option, optionIndex) => (
-              <button key={option} aria-pressed={answer === option} className={answer === option ? "selected" : ""} onClick={() => setAnswers((value) => ({ ...value, [question.id]: option }))}>
+              <button key={option} aria-pressed={answer === option} className={answer === option ? "selected" : ""} onClick={() => updateAnswer(question.id, option)}>
                 <span>{String.fromCharCode(65 + optionIndex)}</span>{option}
               </button>
             ))}
           </div>
         ) : question.type === "speech" ? (
           <SpeechAnswer
+            key={question.id}
             lessonId={lessonId}
             questionId={question.id}
             demo={demo}
-            value={answer}
-            onChange={(value) => setAnswers((current) => ({ ...current, [question.id]: value }))}
-            onUploaded={(recordingId) => setRecordings((current) => ({ ...current, [question.id]: recordingId }))}
+            recordingId={recordings[question.id] ?? null}
+            onRecordingStarted={() => setRecordings((current) => {
+              const next = { ...current };
+              delete next[question.id];
+              queueDraftSave(index, answers, next);
+              return next;
+            })}
+            onUploaded={(recordingId) => setRecordings((current) => {
+              const next = { ...current, [question.id]: recordingId };
+              queueDraftSave(index, answers, next);
+              return next;
+            })}
             onError={setError}
             speechText={question.speechText}
           />
         ) : (
-          <textarea value={answer} onChange={(event) => setAnswers((value) => ({ ...value, [question.id]: event.target.value }))} placeholder="在这里输入你的答案" />
+          <textarea value={answer} onChange={(event) => updateAnswer(question.id, event.target.value, 500)} onBlur={() => queueDraftSave(index, answers, recordings)} placeholder="在这里输入你的答案" />
         )}
         <footer>
-          <span>{error || (kind === "review" ? "计划复习会更新掌握度和下一次复习时间" : "同一天仅第一次正式考核计入掌握度，练习不计分")}</span>
-          <button disabled={!answer.trim() || (question.type === "speech" && kind !== "practice" && !recordings[question.id]) || submitting} onClick={continueAssessment}>
+          <span>{error || (syncStatus === "restored" ? "已恢复上次进度" : syncStatus === "saving" ? "正在同步进度…" : syncStatus === "saved" ? "进度已同步，可在电脑或 iPhone 继续" : syncStatus === "error" ? "进度同步失败，请保持本页并重试" : kind === "review" ? "计划复习会更新掌握度和下一次复习时间" : "同一天仅第一次正式考核计入掌握度，练习不计分")}</span>
+          <button disabled={!canContinue || submitting} onClick={continueAssessment}>
             {submitting ? "正在提交…" : finalQuestion ? kind === "review" ? "提交复习" : "提交考核" : "下一题"}<ArrowRight size={18} />
           </button>
         </footer>
@@ -131,7 +210,23 @@ function QuestionAudio({ url, mode, start, end }: { url: string; mode?: "word" |
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [state, setState] = useState<"idle" | "playing" | "played" | "error">("idle");
   const [speed, setSpeed] = useState(1);
-  const clipUrl = start === undefined ? url : `${url}#t=${start},${end ?? ""}`;
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.pause();
+    audio.load();
+    setState("idle");
+  }, [url, start, end]);
+
+  async function loadMetadata(audio: HTMLAudioElement) {
+    if (audio.readyState >= HTMLMediaElement.HAVE_METADATA) return;
+    await new Promise<void>((resolve, reject) => {
+      audio.addEventListener("loadedmetadata", () => resolve(), { once: true });
+      audio.addEventListener("error", () => reject(new Error("audio metadata failed")), { once: true });
+      audio.load();
+    });
+  }
 
   async function togglePlayback() {
     const audio = audioRef.current;
@@ -141,13 +236,10 @@ function QuestionAudio({ url, mode, start, end }: { url: string; mode?: "word" |
       setState("played");
       return;
     }
-    if (start !== undefined && (audio.currentTime < start || (end !== undefined && audio.currentTime >= end))) {
-      audio.currentTime = start;
-    } else if (audio.ended) {
-      audio.currentTime = start ?? 0;
-    }
-    audio.playbackRate = speed;
     try {
+      await loadMetadata(audio);
+      audio.currentTime = start ?? 0;
+      audio.playbackRate = speed;
       await audio.play();
       setState("playing");
     } catch {
@@ -163,13 +255,17 @@ function QuestionAudio({ url, mode, start, end }: { url: string; mode?: "word" |
           {state === "playing" ? <Pause /> : state === "played" ? <RotateCcw /> : <Play />}
         </button>
         <span aria-live="polite">{state === "idle" ? "尚未播放" : state === "playing" ? "正在播放" : state === "error" ? "音频加载失败，请重试" : "可重新播放"}</span>
-        {mode === "sentence" && <div className="assessment-speed" aria-label="播放速度">{[0.75, 1].map((value) => <button key={value} type="button" className={speed === value ? "active" : ""} onClick={() => { setSpeed(value); if (audioRef.current) audioRef.current.playbackRate = value; }}>{value}×</button>)}</div>}
+        {mode === "sentence" && <div className="assessment-speed" aria-label="播放速度">{[0.75, 1, 1.5, 2].map((value) => <button key={value} type="button" className={speed === value ? "active" : ""} onClick={() => { setSpeed(value); if (audioRef.current) audioRef.current.playbackRate = value; }}>{value}×</button>)}</div>}
       </div>
       <audio
         ref={audioRef}
         className="assessment-audio-element"
         preload="metadata"
-        src={clipUrl}
+        src={url}
+        onLoadedMetadata={() => {
+          const audio = audioRef.current;
+          if (audio && start !== undefined) audio.currentTime = start;
+        }}
         onPlay={() => {
           const audio = audioRef.current;
           if (audio && start !== undefined && (audio.currentTime < start || (end !== undefined && audio.currentTime >= end))) {
@@ -195,8 +291,8 @@ function SpeechAnswer({
   lessonId,
   questionId,
   demo,
-  value,
-  onChange,
+  recordingId,
+  onRecordingStarted,
   onUploaded,
   onError,
   speechText,
@@ -204,8 +300,8 @@ function SpeechAnswer({
   lessonId: number;
   questionId: string;
   demo: boolean;
-  value: string;
-  onChange: (value: string) => void;
+  recordingId: string | null;
+  onRecordingStarted: () => void;
   onUploaded: (recordingId: string) => void;
   onError: (message: string) => void;
   speechText?: string | undefined;
@@ -216,7 +312,6 @@ function SpeechAnswer({
   const [recording, setRecording] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
-  const [uploaded, setUploaded] = useState(false);
 
   useEffect(() => () => {
     streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -243,7 +338,7 @@ function SpeechAnswer({
       recorder.onstop = () => void finishRecording(recorder.mimeType);
       recorder.start();
       setRecording(true);
-      setUploaded(false);
+      onRecordingStarted();
     } catch {
       onError("无法使用麦克风。请允许浏览器访问麦克风后重新录制。");
     }
@@ -265,7 +360,6 @@ function SpeechAnswer({
         ? { recordingId: `demo-${questionId}` }
         : await api.uploadRecording(lessonId, questionId, blob);
       onUploaded(receipt.recordingId);
-      setUploaded(true);
     } catch (reason) {
       onError(reason instanceof Error ? reason.message : "录音上传失败");
     } finally {
@@ -281,13 +375,13 @@ function SpeechAnswer({
           {recording ? <><Square size={17} />停止录音</> : <><Mic size={18} />{audioUrl ? "重新录制" : "开始录音"}</>}
         </button>
         {audioUrl && <audio controls src={audioUrl} />}
-        <span>{recording ? "正在录音…" : uploading ? "正在保存录音…" : uploaded ? <><Check size={15} />录音已保存</> : "正式考核必须保存录音"}</span>
+        <span>{recording ? "正在录音…" : uploading ? "正在保存录音…" : recordingId ? <><Check size={15} />录音已保存</> : "正式考核必须保存录音"}</span>
       </div>
-      <label>
-        <span>朗读文本核对</span>
-        <textarea value={value} onChange={(event) => onChange(event.target.value)} placeholder="录音后输入你实际朗读的英文，系统用于当前文本准确度评分" />
-      </label>
-      <p><Play size={15} />提交前请回放录音核对；当前版本保存原始录音作为复盘证据，发音质量评分将在语音识别模型接入后启用。</p>
+      <div className="speech-evidence">
+        <strong>录音保存后即可进入下一题</strong>
+        <span>不需要在手机上再次输入朗读文本。</span>
+      </div>
+      <p><Play size={15} />提交前可以回放核对；本版按有效录音保存口语证据，发音质量将在语音识别模型接入后进一步评分。</p>
     </div>
   );
 }

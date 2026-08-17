@@ -86,6 +86,22 @@ export async function migrate(database: Database): Promise<void> {
     ON recordings(user_id, lesson_id, created_at)
   `);
   await database.run(sql`
+    CREATE TABLE IF NOT EXISTS assessment_drafts (
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      lesson_id INTEGER NOT NULL,
+      kind TEXT NOT NULL,
+      current_index INTEGER NOT NULL DEFAULT 0,
+      answers TEXT NOT NULL,
+      recordings TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE(user_id, lesson_id, kind)
+    )
+  `);
+  await database.run(sql`
+    CREATE INDEX IF NOT EXISTS assessment_drafts_user_updated_idx
+    ON assessment_drafts(user_id, updated_at)
+  `);
+  await database.run(sql`
     CREATE TABLE IF NOT EXISTS review_queue (
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       lesson_id INTEGER NOT NULL,
@@ -110,6 +126,127 @@ export async function migrate(database: Database): Promise<void> {
       updated_at TEXT NOT NULL,
       UNIQUE(user_id, question_id)
     )
+  `);
+  await database.run(sql`
+    CREATE TABLE IF NOT EXISTS dictionary_sources (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      version TEXT NOT NULL,
+      format TEXT NOT NULL,
+      license TEXT,
+      priority INTEGER NOT NULL DEFAULT 100,
+      status TEXT NOT NULL DEFAULT 'staging',
+      imported_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE(id, version)
+    )
+  `);
+  await database.run(sql`
+    CREATE INDEX IF NOT EXISTS dictionary_source_status_idx
+    ON dictionary_sources(status, priority)
+  `);
+  await database.run(sql`
+    CREATE TABLE IF NOT EXISTS dictionary_entries (
+      id TEXT PRIMARY KEY,
+      term TEXT NOT NULL,
+      normalized_term TEXT NOT NULL UNIQUE,
+      status TEXT NOT NULL DEFAULT 'pending',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )
+  `);
+  await database.run(sql`
+    CREATE INDEX IF NOT EXISTS dictionary_entry_status_idx
+    ON dictionary_entries(status, updated_at)
+  `);
+  await database.run(sql`
+    CREATE TABLE IF NOT EXISTS dictionary_entry_sources (
+      id TEXT PRIMARY KEY,
+      entry_id TEXT NOT NULL REFERENCES dictionary_entries(id) ON DELETE CASCADE,
+      source_id TEXT NOT NULL REFERENCES dictionary_sources(id) ON DELETE CASCADE,
+      source_entry_key TEXT NOT NULL,
+      definition TEXT,
+      part_of_speech TEXT,
+      raw_notation TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE(source_id, source_entry_key)
+    )
+  `);
+  await database.run(sql`
+    CREATE INDEX IF NOT EXISTS dictionary_entry_source_entry_idx
+    ON dictionary_entry_sources(entry_id, source_id)
+  `);
+  await database.run(sql`
+    CREATE TABLE IF NOT EXISTS dictionary_resources (
+      id TEXT PRIMARY KEY,
+      source_id TEXT NOT NULL REFERENCES dictionary_sources(id) ON DELETE CASCADE,
+      resource_key TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      storage_path TEXT NOT NULL,
+      mime_type TEXT NOT NULL,
+      sha256 TEXT NOT NULL,
+      byte_size INTEGER NOT NULL,
+      created_at TEXT NOT NULL,
+      UNIQUE(source_id, resource_key)
+    )
+  `);
+  await database.run(sql`
+    CREATE INDEX IF NOT EXISTS dictionary_resource_sha_idx
+    ON dictionary_resources(sha256)
+  `);
+  await database.run(sql`
+    CREATE TABLE IF NOT EXISTS pronunciations (
+      id TEXT PRIMARY KEY,
+      entry_id TEXT NOT NULL REFERENCES dictionary_entries(id) ON DELETE CASCADE,
+      source_id TEXT NOT NULL REFERENCES dictionary_sources(id) ON DELETE CASCADE,
+      accent TEXT NOT NULL,
+      ipa TEXT,
+      raw_phonetic TEXT,
+      notation_system TEXT NOT NULL DEFAULT 'unknown',
+      status TEXT NOT NULL DEFAULT 'pending',
+      is_primary INTEGER NOT NULL DEFAULT 0,
+      part_of_speech TEXT,
+      audio_resource_id TEXT REFERENCES dictionary_resources(id) ON DELETE SET NULL,
+      verified_at TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE(entry_id, source_id, accent, ipa)
+    )
+  `);
+  await database.run(sql`
+    CREATE INDEX IF NOT EXISTS pronunciation_entry_accent_idx
+    ON pronunciations(entry_id, accent, is_primary)
+  `);
+  await database.run(sql`
+    CREATE TABLE IF NOT EXISTS dictionary_import_jobs (
+      id TEXT PRIMARY KEY,
+      source_id TEXT REFERENCES dictionary_sources(id) ON DELETE SET NULL,
+      input_path TEXT NOT NULL,
+      status TEXT NOT NULL,
+      report TEXT NOT NULL,
+      started_at TEXT NOT NULL,
+      completed_at TEXT
+    )
+  `);
+  await database.run(sql`
+    CREATE INDEX IF NOT EXISTS dictionary_import_status_idx
+    ON dictionary_import_jobs(status, started_at)
+  `);
+  await database.run(sql`
+    CREATE TABLE IF NOT EXISTS dictionary_conflicts (
+      id TEXT PRIMARY KEY,
+      entry_id TEXT NOT NULL REFERENCES dictionary_entries(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL,
+      details TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'open',
+      created_at TEXT NOT NULL,
+      resolved_at TEXT
+    )
+  `);
+  await database.run(sql`
+    CREATE INDEX IF NOT EXISTS dictionary_conflict_status_idx
+    ON dictionary_conflicts(status, created_at)
   `);
   await database.run(sql`
     CREATE TABLE IF NOT EXISTS vocabulary_entries (

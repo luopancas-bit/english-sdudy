@@ -75,6 +75,16 @@ export interface RecordingReceipt {
   byteSize: number;
 }
 
+export interface AssessmentDraft {
+  userId: string;
+  lessonId: number;
+  kind: "formal" | "practice" | "review";
+  currentIndex: number;
+  answers: Record<string, string>;
+  recordings: Record<string, string>;
+  updatedAt: string;
+}
+
 export interface LessonContent {
   id: number;
   slug: string;
@@ -90,11 +100,30 @@ export interface LessonContent {
     term: string;
     definition: string;
     sourcePage?: number;
+    pronunciation?: PronunciationData | undefined;
   }>;
   sentences: Array<{
     id: string;
     text: string;
     cloze?: string;
+  }>;
+}
+
+export interface AccentPronunciation {
+  ipa: string | null;
+  alternatives: Array<{ ipa: string; partOfSpeech: string | null }>;
+  audioUrl: string | null;
+}
+
+export interface PronunciationData {
+  status: "verified" | "pending" | "ambiguous";
+  us: AccentPronunciation;
+  uk: AccentPronunciation;
+  parts: Array<{
+    term: string;
+    status: "verified" | "pending" | "ambiguous";
+    us: AccentPronunciation;
+    uk: AccentPronunciation;
   }>;
 }
 
@@ -176,6 +205,7 @@ export interface VocabularyEntry {
   status: "learning" | "mastered";
   createdAt: string;
   updatedAt: string;
+  pronunciation?: PronunciationData | undefined;
 }
 
 export interface VocabularyData {
@@ -203,6 +233,27 @@ export interface VocabularyTrainingInput {
   device: "desktop" | "mobile";
 }
 
+export interface DictionaryStatusData {
+  summary: {
+    entries: number;
+    us: number;
+    uk: number;
+    dual: number;
+    pending: number;
+    ambiguous: number;
+    openConflicts: number;
+  };
+  sources: Array<{
+    id: string;
+    name: string;
+    version: string;
+    format: "builtin" | "mdx" | "json" | "api";
+    status: "staging" | "active" | "disabled";
+    priority: number;
+    importedAt: string;
+  }>;
+}
+
 export interface WordMemoryChapter {
   lessonId: number;
   titleEn: string;
@@ -216,6 +267,7 @@ export interface TypingTrainingEntry {
   term: string;
   meaning: string;
   example: string | null;
+  pronunciation?: PronunciationData | undefined;
   recordEntryId?: string;
   wordMemory?: {
     lessonId: number;
@@ -255,6 +307,7 @@ export interface WordAssessment {
     clozePrompt: string;
     spellingPrompt: string;
     audioUrl: string;
+    pronunciation?: PronunciationData | undefined;
     audioStart?: number;
     audioEnd?: number;
   }>;
@@ -289,6 +342,7 @@ export interface WordReviewTask {
     clozePrompt: string;
     spellingPrompt: string;
     audioUrl: string;
+    pronunciation?: PronunciationData | undefined;
   } | null;
 }
 

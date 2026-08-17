@@ -9,11 +9,14 @@ import {
   RotateCcw,
   Volume2,
 } from "lucide-react";
+import type { PronunciationData } from "../../types";
+import { PronunciationLine } from "./PronunciationLine";
 
 export interface ChapterStudyCard {
   term: string;
   meaning: string;
   example: string | null;
+  pronunciation?: PronunciationData | undefined;
 }
 
 export function ChapterWordStudy({
@@ -113,6 +116,7 @@ export function ChapterWordStudy({
               <Volume2 size={21} />{speechAvailable ? "听发音" : "当前浏览器不支持发音"}
             </button>
           </div>
+          <PronunciationLine pronunciation={activeCard.pronunciation} />
           <div className="chapter-card-answer">
             {meaningVisible ? (
               <>

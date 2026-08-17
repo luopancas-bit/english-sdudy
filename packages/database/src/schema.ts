@@ -86,6 +86,23 @@ export const recordings = sqliteTable(
   ],
 );
 
+export const assessmentDrafts = sqliteTable(
+  "assessment_drafts",
+  {
+    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    lessonId: integer("lesson_id").notNull(),
+    kind: text("kind", { enum: ["formal", "practice", "review"] }).notNull(),
+    currentIndex: integer("current_index").notNull().default(0),
+    answers: text("answers", { mode: "json" }).$type<Record<string, string>>().notNull(),
+    recordings: text("recordings", { mode: "json" }).$type<Record<string, string>>().notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("assessment_drafts_user_lesson_kind_unique").on(table.userId, table.lessonId, table.kind),
+    index("assessment_drafts_user_updated_idx").on(table.userId, table.updatedAt),
+  ],
+);
+
 export const lessonMastery = sqliteTable(
   "lesson_mastery",
   {
@@ -136,6 +153,131 @@ export const wrongAnswers = sqliteTable(
     uniqueIndex("wrong_answers_user_question_unique").on(table.userId, table.questionId),
     index("wrong_answers_user_idx").on(table.userId, table.resolvedAt),
   ],
+);
+
+export const dictionarySources = sqliteTable(
+  "dictionary_sources",
+  {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    version: text("version").notNull(),
+    format: text("format", { enum: ["builtin", "mdx", "json", "api"] }).notNull(),
+    license: text("license"),
+    priority: integer("priority").notNull().default(100),
+    status: text("status", { enum: ["staging", "active", "disabled"] }).notNull().default("staging"),
+    importedAt: text("imported_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("dictionary_source_version_unique").on(table.id, table.version),
+    index("dictionary_source_status_idx").on(table.status, table.priority),
+  ],
+);
+
+export const dictionaryEntries = sqliteTable(
+  "dictionary_entries",
+  {
+    id: text("id").primaryKey(),
+    term: text("term").notNull(),
+    normalizedTerm: text("normalized_term").notNull(),
+    status: text("status", { enum: ["verified", "pending", "ambiguous"] }).notNull().default("pending"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("dictionary_entry_normalized_unique").on(table.normalizedTerm),
+    index("dictionary_entry_status_idx").on(table.status, table.updatedAt),
+  ],
+);
+
+export const dictionaryEntrySources = sqliteTable(
+  "dictionary_entry_sources",
+  {
+    id: text("id").primaryKey(),
+    entryId: text("entry_id").notNull().references(() => dictionaryEntries.id, { onDelete: "cascade" }),
+    sourceId: text("source_id").notNull().references(() => dictionarySources.id, { onDelete: "cascade" }),
+    sourceEntryKey: text("source_entry_key").notNull(),
+    definition: text("definition"),
+    partOfSpeech: text("part_of_speech"),
+    rawNotation: text("raw_notation"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("dictionary_entry_source_key_unique").on(table.sourceId, table.sourceEntryKey),
+    index("dictionary_entry_source_entry_idx").on(table.entryId, table.sourceId),
+  ],
+);
+
+export const dictionaryResources = sqliteTable(
+  "dictionary_resources",
+  {
+    id: text("id").primaryKey(),
+    sourceId: text("source_id").notNull().references(() => dictionarySources.id, { onDelete: "cascade" }),
+    resourceKey: text("resource_key").notNull(),
+    kind: text("kind", { enum: ["audio", "image", "font"] }).notNull(),
+    storagePath: text("storage_path").notNull(),
+    mimeType: text("mime_type").notNull(),
+    sha256: text("sha256").notNull(),
+    byteSize: integer("byte_size").notNull(),
+    createdAt: text("created_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("dictionary_resource_source_key_unique").on(table.sourceId, table.resourceKey),
+    index("dictionary_resource_sha_idx").on(table.sha256),
+  ],
+);
+
+export const pronunciations = sqliteTable(
+  "pronunciations",
+  {
+    id: text("id").primaryKey(),
+    entryId: text("entry_id").notNull().references(() => dictionaryEntries.id, { onDelete: "cascade" }),
+    sourceId: text("source_id").notNull().references(() => dictionarySources.id, { onDelete: "cascade" }),
+    accent: text("accent", { enum: ["us", "uk"] }).notNull(),
+    ipa: text("ipa"),
+    rawPhonetic: text("raw_phonetic"),
+    notationSystem: text("notation_system", { enum: ["ipa", "dj", "kk", "unknown"] }).notNull().default("unknown"),
+    status: text("status", { enum: ["verified", "pending", "ambiguous"] }).notNull().default("pending"),
+    isPrimary: integer("is_primary", { mode: "boolean" }).notNull().default(false),
+    partOfSpeech: text("part_of_speech"),
+    audioResourceId: text("audio_resource_id").references(() => dictionaryResources.id, { onDelete: "set null" }),
+    verifiedAt: text("verified_at"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("pronunciation_source_value_unique").on(table.entryId, table.sourceId, table.accent, table.ipa),
+    index("pronunciation_entry_accent_idx").on(table.entryId, table.accent, table.isPrimary),
+  ],
+);
+
+export const dictionaryImportJobs = sqliteTable(
+  "dictionary_import_jobs",
+  {
+    id: text("id").primaryKey(),
+    sourceId: text("source_id").references(() => dictionarySources.id, { onDelete: "set null" }),
+    inputPath: text("input_path").notNull(),
+    status: text("status", { enum: ["scanning", "ready", "published", "failed", "rolled_back"] }).notNull(),
+    report: text("report", { mode: "json" }).$type<Record<string, unknown>>().notNull(),
+    startedAt: text("started_at").notNull(),
+    completedAt: text("completed_at"),
+  },
+  (table) => [index("dictionary_import_status_idx").on(table.status, table.startedAt)],
+);
+
+export const dictionaryConflicts = sqliteTable(
+  "dictionary_conflicts",
+  {
+    id: text("id").primaryKey(),
+    entryId: text("entry_id").notNull().references(() => dictionaryEntries.id, { onDelete: "cascade" }),
+    kind: text("kind", { enum: ["phonetic", "definition", "resource"] }).notNull(),
+    details: text("details", { mode: "json" }).$type<Record<string, unknown>>().notNull(),
+    status: text("status", { enum: ["open", "resolved", "ignored"] }).notNull().default("open"),
+    createdAt: text("created_at").notNull(),
+    resolvedAt: text("resolved_at"),
+  },
+  (table) => [index("dictionary_conflict_status_idx").on(table.status, table.createdAt)],
 );
 
 export const vocabularyEntries = sqliteTable(

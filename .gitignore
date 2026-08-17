@@ -26,6 +26,10 @@ backups/
 
 # Private or licensed curriculum assets
 content-private/
+dictionary-imports/
+词典/
+*.mdx
+*.mdd
 app/
 public/
 src/data/

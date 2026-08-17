@@ -12,6 +12,7 @@ import { api } from "../../api";
 import { demoVocabulary } from "../../demo";
 import type { TypingTrainingEntry, VocabularyData, VocabularyEntry, VocabularyInput } from "../../types";
 import { QwertyTraining } from "./QwertyTraining";
+import { PronunciationLine } from "./PronunciationLine";
 
 type Filter = "all" | VocabularyEntry["status"];
 
@@ -179,6 +180,7 @@ export function VocabularyBook({ demo }: { demo: boolean }) {
                       <h3>{entry.term}</h3>
                       <span>{entry.lessonId ? `来自第 ${String(entry.lessonId).padStart(2, "0")} 课` : "个人添加"}</span>
                     </header>
+                    <PronunciationLine pronunciation={entry.pronunciation} />
                     <p className="meaning">{entry.meaning}</p>
                     {entry.example ? <blockquote>{entry.example}</blockquote> : null}
                   </div>
@@ -232,6 +234,7 @@ function toTrainingEntry(entry: VocabularyEntry): TypingTrainingEntry {
     term: entry.term,
     meaning: entry.meaning,
     example: entry.example,
+    pronunciation: entry.pronunciation,
     recordEntryId: entry.id,
   };
 }

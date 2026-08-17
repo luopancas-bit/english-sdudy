@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, CheckCircle2, Headphones, ShieldCheck, Volume2 } from "lucide-react";
 import { api } from "../../api";
 import type { WordAssessment, WordAssessmentResult } from "../../types";
+import { PronunciationLine } from "./PronunciationLine";
 
 type Dimension = "listening" | "meaning" | "spelling" | "context";
 type Answer = { term: string; meaning: string; listening: string; spelling: string; context: string };
@@ -98,6 +99,7 @@ export function WordAssessmentView({
           {result.results.map((item) => (
             <article className={item.passed ? "passed" : ""} key={item.term}>
               <header><strong>{item.term}</strong><em>{item.total} 分</em></header>
+              <PronunciationLine pronunciation={assessment.items.find((candidate) => candidate.term === item.term)?.pronunciation} compact />
               <ul>
                 <li>释义 {item.meaning}</li><li>听音 {item.listening}</li><li>拼写 {item.spelling}</li><li>例句 {item.context}</li>
               </ul>
@@ -199,6 +201,12 @@ function demoAssessment(lessonId: number): WordAssessment {
       clozePrompt: "I _____ my work before I begin.",
       spellingPrompt: "组织；整理",
       audioUrl: "",
+      pronunciation: {
+        status: "verified",
+        us: { ipa: "ˈɔːrɡənaɪz", alternatives: [], audioUrl: null },
+        uk: { ipa: "ˈɔːɡənaɪz", alternatives: [], audioUrl: null },
+        parts: [],
+      },
     }],
   };
 }

@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { ArrowLeft, Check, KeyRound, Laptop, Save, ShieldCheck, Smartphone, Trash2 } from "lucide-react";
+import { ArrowLeft, BookOpenCheck, Check, CircleDashed, KeyRound, Laptop, Save, ShieldCheck, Smartphone, Trash2 } from "lucide-react";
 import { api } from "../../api";
-import type { AccountSession, User } from "../../types";
+import type { AccountSession, DictionaryStatusData, User } from "../../types";
 
 export function ProfileSettings({
   user,
@@ -67,7 +67,49 @@ export function ProfileSettings({
           {message && <span role="status">{message}</span>}
         </div>
       </form>
+      <DictionaryStatus demo={demo} />
       <SecuritySettings demo={demo} />
+    </section>
+  );
+}
+
+function DictionaryStatus({ demo }: { demo: boolean }) {
+  const [data, setData] = useState<DictionaryStatusData | null>(() => demo ? demoDictionaryStatus : null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (demo) return;
+    let active = true;
+    api.dictionaryStatus()
+      .then((result) => { if (active) setData(result); })
+      .catch((reason) => { if (active) setError(reason instanceof Error ? reason.message : "词典状态加载失败"); });
+    return () => { active = false; };
+  }, [demo]);
+
+  return (
+    <section className="dictionary-status-panel">
+      <div className="security-heading"><BookOpenCheck size={24} /><div><h2>词典与音标库</h2><p>这里只显示覆盖率；词典导入和发布在服务器私有目录完成。</p></div></div>
+      {!data && !error ? <p className="dictionary-status-loading"><CircleDashed size={17} />正在读取词典状态</p> : null}
+      {error ? <p className="security-message" role="alert">{error}</p> : null}
+      {data ? (
+        <>
+          <div className="dictionary-status-summary">
+            <span><small>规范词条</small><strong>{data.summary.entries}</strong></span>
+            <span><small>美英齐全</small><strong>{data.summary.dual}</strong></span>
+            <span><small>待补全</small><strong>{data.summary.pending}</strong></span>
+            <span><small>待核对</small><strong>{data.summary.ambiguous + data.summary.openConflicts}</strong></span>
+          </div>
+          <div className="dictionary-source-list">
+            {data.sources.map((source) => (
+              <article key={source.id}>
+                <div><strong>{source.name}</strong><small>版本 {source.version} · {source.format.toUpperCase()}</small></div>
+                <span>{source.status === "active" ? "已启用" : source.status === "staging" ? "暂存" : "已停用"}</span>
+              </article>
+            ))}
+            {!data.sources.length ? <p>音标库结构已经建立，等待导入第一份词典数据。</p> : null}
+          </div>
+        </>
+      ) : null}
     </section>
   );
 }
@@ -207,3 +249,10 @@ const demoSessions: AccountSession[] = [
     expiresAt: "2026-08-25T19:30:00+08:00",
   },
 ];
+
+const demoDictionaryStatus: DictionaryStatusData = {
+  summary: { entries: 1770, us: 1420, uk: 1396, dual: 1368, pending: 402, ambiguous: 7, openConflicts: 2 },
+  sources: [
+    { id: "course-core@1", name: "课程核心词典", version: "1", format: "builtin", status: "active", priority: 10, importedAt: "2026-08-14T00:00:00.000Z" },
+  ],
+};

@@ -22,6 +22,7 @@ import type {
 } from "../../types";
 import { QwertyTraining } from "./QwertyTraining";
 import { ChapterWordStudy, type ChapterStudyCard } from "./ChapterWordStudy";
+import { PronunciationLine } from "./PronunciationLine";
 import { WordAssessmentView } from "./WordAssessmentView";
 
 const demoChapters: WordMemoryChapter[] = [
@@ -91,12 +92,14 @@ export function WordMemory({ demo }: { demo: boolean }) {
         type: "单词",
         term: word.term,
         meaning: word.definition,
+        pronunciation: word.pronunciation,
       })) : []),
       ...(includeSentences ? lesson.sentences.map((sentence) => ({
         key: `sentence-${sentence.id}`,
         type: "短句",
         term: sentence.text,
         meaning: "完整键入本句",
+        pronunciation: undefined,
       })) : []),
     ];
   }, [includeSentences, includeWords, lesson]);
@@ -108,6 +111,7 @@ export function WordMemory({ demo }: { demo: boolean }) {
       example: lesson.sentences.find((sentence) =>
         sentence.text.toLocaleLowerCase("en-US").includes(word.term.toLocaleLowerCase("en-US"))
       )?.text ?? null,
+      pronunciation: word.pronunciation,
     }));
   }, [lesson]);
 
@@ -149,6 +153,7 @@ export function WordMemory({ demo }: { demo: boolean }) {
           example: word.example,
           recordEntryId: word.id,
           wordMemory: { lessonId: lesson.id, itemType: "word" as const, itemKey: word.term },
+          pronunciation: words.find((item) => item.term === word.term)?.pronunciation,
         })),
         ...sentences.map((sentence) => ({
           id: `sentence-${lesson.id}-${sentence.id}`,
@@ -299,7 +304,7 @@ export function WordMemory({ demo }: { demo: boolean }) {
                   return (
                     <article key={item.key}>
                       <span>{item.type}</span>
-                      <div><strong>{item.term}</strong><p>{item.meaning}</p></div>
+                      <div><strong>{item.term}</strong><PronunciationLine pronunciation={item.pronunciation} compact /><p>{item.meaning}</p></div>
                       <button onClick={() => void prepareTraining({ kind: item.type === "单词" ? "word" : "sentence", index: sourceIndex })}>
                         <Keyboard size={16} />单独训练
                       </button>

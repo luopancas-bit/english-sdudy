@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, CheckCircle2, Headphones, ShieldCheck, Volume2 } from "lucide-react";
 import { api } from "../../api";
 import type { WordReviewResult, WordReviewTask } from "../../types";
+import { PronunciationLine } from "./PronunciationLine";
 
 type Dimension = "listening" | "meaning" | "spelling" | "context";
 type Answer = Record<Dimension, string>;
@@ -36,6 +37,7 @@ export function WordReviewView({ task, onClose, onSaved }: {
       <section className="word-assessment-result">
         <span><CheckCircle2 size={18} />复习记录已同步</span>
         <h2>{evidence.term} · {evidence.total} 分</h2>
+        <PronunciationLine pronunciation={task.task.pronunciation} />
         <p>{evidence.passed ? (evidence.decision === "master" ? "已完成整轮间隔复习，计入长期掌握。" : "本次达标，系统已安排下一次复习。") : "本次未达标，已退回巩固阶段，但不会限制继续学习下一课。"}</p>
         <div>
           <article className={evidence.passed ? "passed" : ""}>

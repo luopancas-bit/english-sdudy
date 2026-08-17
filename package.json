@@ -12,10 +12,14 @@
     "test:e2e": "playwright test",
     "db:bootstrap": "pnpm --filter @zhuguang/api db:bootstrap",
     "audio:import": "node scripts/import-vocabulary-audio.mjs",
+    "dictionary:scan": "node scripts/dictionary/import-mdict.mjs scan",
+    "dictionary:publish": "node scripts/dictionary/import-mdict.mjs publish",
+    "phonetics:import": "node scripts/dictionary/import-free-phonetics.mjs",
     "check": "pnpm build && pnpm typecheck && pnpm test"
   },
   "devDependencies": {
     "@playwright/test": "^1.54.2",
+    "js-mdict": "6.0.6",
     "typescript": "^5.8.3",
     "vitest": "^3.2.4"
   }
