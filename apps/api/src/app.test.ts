@@ -31,7 +31,7 @@ describe("learning account flow", () => {
     await fs.mkdir(path.join(contentDirectory, "audio", "vocabulary", "us"), { recursive: true });
     await fs.writeFile(path.join(contentDirectory, "audio", "vocabulary", "us", "a.m4a"), "word-audio");
     await fs.mkdir(path.join(contentDirectory, "dictionaries", "resources", "test-ipa@1"), { recursive: true });
-    await fs.writeFile(path.join(contentDirectory, "dictionaries", "resources", "test-ipa@1", "synthetic-us.mp3"), "dict-audio");
+    await fs.writeFile(path.join(contentDirectory, "dictionaries", "resources", "test-ipa@1", "audio.mp3"), "dict-audio");
     await fs.writeFile(path.join(contentDirectory, "audio", "vocabulary", "index.json"), JSON.stringify({
       version: 1,
       entries: {
@@ -78,13 +78,13 @@ describe("learning account flow", () => {
           partOfSpeech: "adjective",
           rawNotation: "US /sɪnˈθetɪk/; UK /sɪnˈθetɪk/",
           pronunciations: [
-            { accent: "us", ipa: "sɪnˈθetɪk", rawPhonetic: "/sɪnˈθetɪk/", notationSystem: "ipa", status: "verified", primary: true, partOfSpeech: "adjective", audioResourceKey: "synthetic-us.mp3" },
+            { accent: "us", ipa: "sɪnˈθetɪk", rawPhonetic: "/sɪnˈθetɪk/", notationSystem: "ipa", status: "verified", primary: true, partOfSpeech: "adjective", audioResourceKey: "audio.mp3" },
             { accent: "uk", ipa: "sɪnˈθetɪk", rawPhonetic: "/sɪnˈθetɪk/", notationSystem: "ipa", status: "verified", primary: true, partOfSpeech: "adjective" },
           ],
         }],
         resources: [{
-          key: "synthetic-us.mp3",
-          path: "dictionaries/resources/test-ipa@1/synthetic-us.mp3",
+          key: "audio.mp3",
+          path: "dictionaries/resources/test-ipa@1/audio.mp3",
           kind: "audio",
           mimeType: "audio/mpeg",
           sha256: "0000000000000000000000000000000000000000000000000000000000000000",
