@@ -111,8 +111,6 @@ const wordAssessmentSubmissionSchema = z.object({
 const wordReviewParamsSchema = z.object({ reviewId: z.string().uuid() });
 const wordReviewSubmissionSchema = wordAssessmentSubmissionSchema.shape.answers.element.omit({ term: true });
 
-const COURSE_MAP_LESSON_COUNT = 3;
-
 export async function createApp(
   config: AppConfig = loadConfig(),
   database: Database = createDatabase(config.DATABASE_URL),
@@ -123,6 +121,7 @@ export async function createApp(
   await syncPublishedDictionaries(database, config.CONTENT_DIR);
   const repository = new LearningRepository(database);
   const content = new ContentModule(config.CONTENT_DIR);
+  const courseLessonIds = Array.from({ length: config.COURSE_LESSON_COUNT }, (_item, index) => index + 1);
   const [courseTerms, personalTerms] = await Promise.all([
     content.allVocabularyTerms(),
     repository.allPersonalVocabularyTerms(),
@@ -229,14 +228,17 @@ export async function createApp(
   }
 
   app.get("/api/health", async (_request, reply) => {
-    const firstPhase = await content.firstPhaseReadiness();
-    if (!firstPhase.ready) reply.code(503);
+    const course = await content.firstPhaseReadiness(courseLessonIds);
+    const firstPhaseLessons = course.lessons.filter((lesson) => lesson.lessonId <= 3);
+    const firstPhase = { ready: firstPhaseLessons.every((lesson) => lesson.ready), lessons: firstPhaseLessons };
+    if (!course.ready) reply.code(503);
     return {
-      ok: firstPhase.ready,
+      ok: course.ready,
       service: "zhuguang-english-v2",
       database: true,
-      content: firstPhase.ready,
+      content: course.ready,
       firstPhase,
+      course: { ...course, lessonCount: courseLessonIds.length },
     };
   });
 
@@ -347,9 +349,9 @@ export async function createApp(
         .map((attempt) => attempt.lessonId),
     );
     const currentLesson = Array.from(
-      { length: COURSE_MAP_LESSON_COUNT },
+      { length: config.COURSE_LESSON_COUNT },
       (_item, index) => index + 1,
-    ).find((lessonId) => !attemptedLessons.has(lessonId)) ?? COURSE_MAP_LESSON_COUNT;
+    ).find((lessonId) => !attemptedLessons.has(lessonId)) ?? config.COURSE_LESSON_COUNT;
     const currentAssessment = await content.loadAssessment(currentLesson);
     const history = await Promise.all(
       data.recentAttempts.map(async (attempt) => {
@@ -502,7 +504,7 @@ export async function createApp(
     const user = await requireUser(request, reply);
     if (!user) return;
     const now = new Date().toISOString();
-    const lessonIds = Array.from({ length: COURSE_MAP_LESSON_COUNT }, (_item, index) => index + 1);
+    const lessonIds = courseLessonIds;
     const [data, assessments] = await Promise.all([
       repository.courseMap(user.id),
       Promise.all(lessonIds.map((lessonId) => content.loadAssessment(lessonId))),
@@ -548,7 +550,7 @@ export async function createApp(
 
     return {
       summary: {
-        totalLessons: COURSE_MAP_LESSON_COUNT,
+        totalLessons: config.COURSE_LESSON_COUNT,
         studiedLessons: lessonIds.filter((lessonId) => formalLessonIds.has(lessonId)).length,
         masteredLessons: visibleMastery.filter((item) =>
           ["mastered", "proficient", "long-term"].includes(item.band),
@@ -816,7 +818,7 @@ export async function createApp(
     const user = await requireUser(request, reply);
     if (!user) return;
     const params = z.object({
-      lessonId: z.coerce.number().int().min(1).max(COURSE_MAP_LESSON_COUNT),
+      lessonId: z.coerce.number().int().min(1).max(config.COURSE_LESSON_COUNT),
       accent: z.enum(["us", "uk"]),
     }).parse(request.params);
     const audio = await content.lessonAudio(params.lessonId, params.accent);
@@ -843,7 +845,7 @@ export async function createApp(
     const user = await requireUser(request, reply);
     if (!user) return;
     const params = z.object({
-      lessonId: z.coerce.number().int().min(1).max(COURSE_MAP_LESSON_COUNT),
+      lessonId: z.coerce.number().int().min(1).max(config.COURSE_LESSON_COUNT),
       questionId: z.string().min(1).max(80).regex(/^[a-zA-Z0-9_-]+$/),
       accent: z.enum(["us", "uk"]),
     }).parse(request.params);
@@ -893,7 +895,7 @@ export async function createApp(
     const user = await requireUser(request, reply);
     if (!user) return;
     const params = z.object({
-      lessonId: z.coerce.number().int().min(1).max(COURSE_MAP_LESSON_COUNT),
+      lessonId: z.coerce.number().int().min(1).max(config.COURSE_LESSON_COUNT),
       questionId: z.string().min(1).max(80).regex(/^[a-zA-Z0-9_-]+$/),
     }).parse(request.params);
     const assessment = await content.loadAssessment(params.lessonId);

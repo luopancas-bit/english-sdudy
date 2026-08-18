@@ -1,7 +1,7 @@
 services:
   english-study:
     build: .
-    image: office-english-study:2.1.0-assessment-drafts
+    image: office-english-study:2.2.0-all-lessons
     container_name: office-english-study-v2
     restart: unless-stopped
     env_file:

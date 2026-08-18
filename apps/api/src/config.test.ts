@@ -6,6 +6,10 @@ const baseEnvironment = {
 };
 
 describe("session cookie configuration", () => {
+  it("enables all 40 course lessons by default", () => {
+    expect(loadConfig(baseEnvironment).COURSE_LESSON_COUNT).toBe(40);
+  });
+
   it("defaults to secure cookies in production", () => {
     expect(loadConfig({ ...baseEnvironment, NODE_ENV: "production" }).SESSION_COOKIE_SECURE).toBe(true);
   });

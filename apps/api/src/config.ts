@@ -7,6 +7,7 @@ const configSchema = z.object({
   DATABASE_URL: z.string().default("file:./data/english-study.sqlite"),
   CONTENT_DIR: z.string().default("./content-private"),
   RECORDINGS_DIR: z.string().default("./recordings"),
+  COURSE_LESSON_COUNT: z.coerce.number().int().min(1).max(40).default(40),
   SESSION_COOKIE_NAME: z.string().default("zhuguang_session"),
   SESSION_COOKIE_SECURE: z.enum(["true", "false"]).optional(),
   SESSION_TTL_DAYS: z.coerce.number().int().min(1).max(90).default(30),

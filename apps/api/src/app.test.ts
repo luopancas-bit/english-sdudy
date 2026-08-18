@@ -131,6 +131,7 @@ describe("learning account flow", () => {
       DATABASE_URL: databaseUrl,
       CONTENT_DIR: contentDirectory,
       RECORDINGS_DIR: path.join(directory, "recordings"),
+      COURSE_LESSON_COUNT: 3,
       SESSION_COOKIE_NAME: "test_session",
       SESSION_COOKIE_SECURE: false,
       SESSION_TTL_DAYS: 7,

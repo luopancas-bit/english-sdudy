@@ -10,12 +10,19 @@ const assessmentRoot = path.join(contentRoot, "assessments");
 const libraryRoot = path.join(contentRoot, "audio", "vocabulary");
 const accent = process.argv.includes("--uk") ? "uk" : "us";
 const missingOnly = process.argv.includes("--missing-only");
+const offline = process.argv.includes("--offline");
+const dryRun = process.argv.includes("--dry-run");
 const lessonsArgument = process.argv.find((argument) => argument.startsWith("--lessons="));
 const lessonFilter = lessonsArgument
-  ? new Set(lessonsArgument.slice("--lessons=".length).split(",").map(Number).filter(Number.isInteger))
+  ? parseLessonSelection(lessonsArgument.slice("--lessons=".length))
   : null;
 
-const normalize = (value) => value.toLowerCase().normalize("NFKC").replace(/[^a-z0-9' ]/g, "").replace(/\s+/g, " ").trim();
+const normalize = (value) => value
+  .toLowerCase()
+  .normalize("NFKC")
+  .replace(/[^\p{L}\p{N}\s']/gu, " ")
+  .replace(/\s+/g, " ")
+  .trim();
 const slug = (value) => normalize(value).replace(/'/g, "").replace(/ /g, "-");
 const mimeFromUrl = (url) => url.includes(".ogg") ? "audio/ogg" : "audio/mpeg";
 
@@ -32,13 +39,20 @@ for (const filename of files) {
 const lessons = JSON.parse(await fs.readFile(path.join(contentRoot, "lessons.json"), "utf8"));
 for (const lesson of lessons) {
   if (lessonFilter && !lessonFilter.has(lesson.id)) continue;
-  const vocabulary = new Map((lesson.vocabulary ?? []).map((item) => [normalize(item.term), item.term]));
+  const vocabulary = new Map((lesson.vocabulary ?? [])
+    .filter((item) => item.definition?.trim())
+    .map((item) => [normalize(item.term), item.term]));
   const eligibleTerms = (lesson.sentences ?? [])
     .flatMap((sentence) => sentence.cloze && vocabulary.has(normalize(sentence.cloze))
       ? [vocabulary.get(normalize(sentence.cloze))]
       : [])
     .slice(0, 5);
   for (const term of eligibleTerms) terms.set(normalize(term), term);
+}
+
+if (dryRun) {
+  console.log(`Would import ${terms.size} assessment and word-review terms for ${accent}.`);
+  process.exit(0);
 }
 
 await fs.mkdir(path.join(libraryRoot, accent), { recursive: true });
@@ -59,7 +73,7 @@ for (const [key, term] of terms) {
     continue;
   }
   let asset;
-  if (!term.includes(" ")) {
+  if (!offline && !term.includes(" ")) {
     try {
       const response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(term)}`);
       if (response.ok) {
@@ -105,3 +119,21 @@ for (const [key, term] of terms) {
 await fs.writeFile(path.join(libraryRoot, "index.json"), `${JSON.stringify(library, null, 2)}\n`);
 await fs.chmod(path.join(libraryRoot, "index.json"), 0o644);
 console.log(`Imported ${terms.size} assessment and word-review terms into ${path.join(libraryRoot, "index.json")}`);
+
+function parseLessonSelection(value) {
+  const result = new Set();
+  for (const part of value.split(",")) {
+    const range = part.match(/^(\d+)-(\d+)$/);
+    if (range) {
+      const start = Number(range[1]);
+      const end = Number(range[2]);
+      if (start > end) throw new Error(`Invalid lesson range: ${part}`);
+      for (let lessonId = start; lessonId <= end; lessonId += 1) result.add(lessonId);
+      continue;
+    }
+    const lessonId = Number(part);
+    if (!Number.isInteger(lessonId)) throw new Error(`Invalid lesson id: ${part}`);
+    result.add(lessonId);
+  }
+  return result;
+}
