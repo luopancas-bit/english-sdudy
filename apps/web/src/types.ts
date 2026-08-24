@@ -399,11 +399,11 @@ export interface LearningReportData {
 
 export type ReadingBookStatus = "queued" | "processing" | "ready" | "protected" | "failed" | "deleted";
 export interface ReadingBook {
-  id: string; title: string; titleZh: string | null; author: string | null; description: string | null;
+  id: string; externalId: string | null; title: string; titleZh: string | null; author: string | null; description: string | null;
   language: string; format: string; visibility: "private" | "curated" | "public"; sourceType: "upload" | "gutenberg" | "builtin";
   status: ReadingBookStatus; difficulty: "entry" | "intermediate" | "challenge" | null; cefrHint: string | null;
   wordCount: number | null; chapterCount: number; byteSize: number; drmStatus: "none" | "protected" | "unknown";
-  progress: number; furthestProgress: number; currentChapter: number; lastReadAt: string | null;
+  shelved: boolean; progress: number; furthestProgress: number; currentChapter: number; lastReadAt: string | null;
   preferences: ReadingPreferences;
 }
 export interface ReadingPreferences { mode: "scroll" | "paged"; fontScale: number; lineHeight: number; theme: "paper" | "white" | "sepia" | "dark"; publisherStyles: boolean; }

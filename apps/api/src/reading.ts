@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { and, desc, eq, gte } from "drizzle-orm";
+import { and, desc, eq, gte, isNull } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import {
   readingAnnotations,
@@ -216,7 +216,17 @@ async function seedCuratedBooks(database: Database) {
   const now = new Date().toISOString();
   for (const item of CURATED_BOOKS) {
     await database.insert(readingBooks).values({ id: item.id, ownerId: null, visibility: "curated", sourceType: "gutenberg", externalId: item.externalId, title: item.title, titleZh: item.titleZh, author: item.author, authorZh: null, description: item.description, language: "en", format: "epub", originalFilename: null, mimeType: "application/epub+zip", storagePath: null, manifestPath: null, coverPath: null, byteSize: 0, derivedByteSize: 0, sha256: null, drmStatus: "none", status: "queued", difficulty: item.difficulty, cefrHint: item.cefrHint, wordCount: null, chapterCount: 0, errorCode: null, createdAt: now, updatedAt: now, deletedAt: null }).onConflictDoNothing();
-    await database.insert(readingImportJobs).values({ id: stableUuid(`gutenberg-job:${item.externalId}`), bookId: item.id, requestedBy: null, status: "queued", progress: 0, createdAt: now, startedAt: null, completedAt: null }).onConflictDoNothing();
+    // Curated titles are a catalog only. Downloading starts after the learner
+    // explicitly adds a title to their shelf, so a server without outbound
+    // Gutenberg access does not fill the queue with failed background jobs.
+    const shelf = await database.query.readingShelves.findFirst({ where: eq(readingShelves.bookId, item.id) });
+    if (!shelf) {
+      await database.delete(readingImportJobs).where(and(eq(readingImportJobs.bookId, item.id), isNull(readingImportJobs.requestedBy)));
+      const existing = await database.query.readingBooks.findFirst({ where: eq(readingBooks.id, item.id) });
+      if (existing && existing.ownerId === null && existing.status !== "ready") {
+        await database.update(readingBooks).set({ status: "queued", errorCode: null, updatedAt: now }).where(eq(readingBooks.id, item.id));
+      }
+    }
   }
 }
 
@@ -232,7 +242,7 @@ function stripMarkup(value: string) { return value.replace(/<script[\s\S]*?<\/sc
 async function readManifest(root: string, relative: string) { return JSON.parse(await fs.readFile(path.resolve(root, relative), "utf8")) as Manifest; }
 async function accessibleBook(database: Database, userId: string, bookId: string) { const book = await database.query.readingBooks.findFirst({ where: eq(readingBooks.id, bookId) }); return book && (book.ownerId === userId || book.visibility !== "private") && book.status !== "deleted" ? book : undefined; }
 async function ensureShelf(database: Database, userId: string, bookId: string) { const existing = await database.query.readingShelves.findFirst({ where: and(eq(readingShelves.userId, userId), eq(readingShelves.bookId, bookId)) }); if (existing) return existing; const row = { userId, bookId, state: "unread" as const, currentChapter: 0, currentOffset: 0, progress: 0, furthestProgress: 0, preferences: defaultPreferences(), addedAt: new Date().toISOString(), lastReadAt: null, finishedAt: null }; await database.insert(readingShelves).values(row); return row; }
-function publicBook(book: typeof readingBooks.$inferSelect, shelf?: typeof readingShelves.$inferSelect) { return { id: book.id, title: book.title, titleZh: book.titleZh, author: book.author, description: book.description, language: book.language, format: book.format, visibility: book.visibility, sourceType: book.sourceType, status: book.status, difficulty: book.difficulty, cefrHint: book.cefrHint, wordCount: book.wordCount, chapterCount: book.chapterCount, byteSize: book.byteSize + book.derivedByteSize, drmStatus: book.drmStatus, progress: shelf?.progress ?? 0, furthestProgress: shelf?.furthestProgress ?? 0, currentChapter: shelf?.currentChapter ?? 0, preferences: shelf?.preferences ?? defaultPreferences(), lastReadAt: shelf?.lastReadAt ?? null }; }
+function publicBook(book: typeof readingBooks.$inferSelect, shelf?: typeof readingShelves.$inferSelect) { return { id: book.id, externalId: book.externalId, title: book.title, titleZh: book.titleZh, author: book.author, description: book.description, language: book.language, format: book.format, visibility: book.visibility, sourceType: book.sourceType, status: book.status, difficulty: book.difficulty, cefrHint: book.cefrHint, wordCount: book.wordCount, chapterCount: book.chapterCount, byteSize: book.byteSize + book.derivedByteSize, drmStatus: book.drmStatus, shelved: Boolean(shelf), progress: shelf?.progress ?? 0, furthestProgress: shelf?.furthestProgress ?? 0, currentChapter: shelf?.currentChapter ?? 0, preferences: shelf?.preferences ?? defaultPreferences(), lastReadAt: shelf?.lastReadAt ?? null }; }
 function defaultPreferences() { return { mode: "scroll", fontScale: 1, lineHeight: 1.9, theme: "paper", publisherStyles: false }; }
 function relativeReadingPath(root: string, absolute: string) { return path.relative(path.resolve(root), absolute); }
 function safeExtension(value: string) { return value.replace(/[^a-z0-9]/g, "").slice(0, 12) || "bin"; }

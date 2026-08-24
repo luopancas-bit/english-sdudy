@@ -12,10 +12,10 @@ export const demoReadingLibrary: ReadingLibraryData = {
   enabled: true, uploadEnabled: true, role: "admin", continueReading: "demo-oz",
   quota: { books: 2, maxBooks: 100, bytes: 286 * 1024 * 1024, maxBytes: 5 * 1024 * 1024 * 1024 },
   books: titles.map(([title, titleZh, author, difficulty], index) => ({
-    id: index === 1 ? "demo-oz" : `demo-${index}`, title, titleZh, author, description: "Project Gutenberg 公版英文原著，难度为系统估算。",
+    id: index === 1 ? "demo-oz" : `demo-${index}`, externalId: null, title, titleZh, author, description: "Project Gutenberg 公版英文原著，难度为系统估算。",
     language: "en", format: "epub", visibility: "curated", sourceType: "gutenberg", status: "ready", difficulty,
     cefrHint: difficulty === "entry" ? "A2–B1" : difficulty === "intermediate" ? "B1–B2" : "B2–C1", wordCount: 42_000 + index * 3_700,
-    chapterCount: 27, byteSize: 1_400_000, drmStatus: "none", progress: index === 1 ? 45 : index === 4 ? 28 : index === 5 ? 12 : 0,
+    chapterCount: 27, byteSize: 1_400_000, drmStatus: "none", shelved: index === 1 || index === 4 || index === 5, progress: index === 1 ? 45 : index === 4 ? 28 : index === 5 ? 12 : 0,
     furthestProgress: index === 1 ? 45 : 0, currentChapter: index === 1 ? 11 : 0, lastReadAt: index === 1 ? new Date().toISOString() : null,
     preferences: { mode: "scroll", fontScale: 1, lineHeight: 1.9, theme: "paper", publisherStyles: false },
   })),
