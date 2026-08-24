@@ -7,7 +7,7 @@
 ## 书籍来源与格式
 
 - 本地导入：EPUB、PDF、TXT、MOBI、AZW/AZW3、FB2、HTML、Markdown、DOCX、RTF。
-- 精选书库：内置 12 本 Project Gutenberg 公版英文原著目录，由独立 worker 下载并解析。
+- 精选书库：内置 12 本 Project Gutenberg 公版英文原著目录，仅展示可选书目；用户点击“加入书架”后才创建下载任务，再由独立 worker 下载并解析。这样服务器无法访问 Gutenberg 时不会自动堆积失败任务。
 - 在线搜索：Project Gutenberg OPDS；用户确认“加入书架”后才下载。
 - PDF 第一版保留文本顺序并提供阅读排版，不对扫描图片自动 OCR。
 - DRM/密码保护文件允许上传，但系统只标记为“受保护”，不破解、不移除 DRM，也不提供绕过工具。
