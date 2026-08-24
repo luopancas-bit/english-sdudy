@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { lazy, Suspense, useState, type ReactNode } from "react";
 import {
   BarChart3,
   Bell,
@@ -26,9 +26,12 @@ import { VocabularyBook } from "../vocabulary/VocabularyBook";
 import { WordMemory } from "../vocabulary/WordMemory";
 import { WordReviewView } from "../vocabulary/WordReviewView";
 
+const ReadingStudy = lazy(() => import("../reading/ReadingStudy").then((module) => ({ default: module.ReadingStudy })));
+
 const navItems = [
   ["today", "今日学习", Sparkles],
   ["map", "课程地图", Map],
+  ["reading", "阅读学习", BookOpen],
   ["review", "错题与复习", ClipboardCheck],
   ["word-memory", "单词记忆", LibraryBig],
   ["vocabulary", "生词本", NotebookTabs],
@@ -116,7 +119,7 @@ export function Dashboard({
           <div>
             {active === "today" && <span className="mobile-brand"><img src="/brand-mark.svg" alt="" />逐光英语</span>}
             <h1>{active === "today" ? <><span className="desktop-title">下午好，今天先巩固，再向前一步</span><span className="mobile-title">今天先巩固，再向前一步</span></> : active === "settings" ? "个人设置" : navItems.find(([id]) => id === active)?.[1]}</h1>
-            <p>{active === "today" ? "依据遗忘曲线与掌握情况，为你生成个性化学习计划。" : active === "settings" ? "管理你的昵称、学习目标和发音偏好。" : active === "map" ? "正式考核记录真实掌握度；未达标也可以继续学习下一课。" : active === "review" ? "按到期时间巩固记忆，并集中处理反复出错的内容。" : active === "word-memory" ? "按词典章节优先学习单词，可选短句；统计只反馈，不限制学习进度。" : active === "vocabulary" ? "保存个人生词；“训练这一组”继续完成键入、纠错和记录闭环。" : "从学习频率、四维能力和逐课掌握度检查真实进步。"}</p>
+            <p>{active === "today" ? "依据遗忘曲线与掌握情况，为你生成个性化学习计划。" : active === "settings" ? "管理你的昵称、学习目标和发音偏好。" : active === "map" ? "正式考核记录真实掌握度；未达标也可以继续学习下一课。" : active === "reading" ? "自由阅读英文书籍，查词、生词和笔记独立于课程考核。" : active === "review" ? "按到期时间巩固记忆，并集中处理反复出错的内容。" : active === "word-memory" ? "按词典章节优先学习单词，可选短句；统计只反馈，不限制学习进度。" : active === "vocabulary" ? "保存个人生词；“训练这一组”继续完成键入、纠错和记录闭环。" : "从学习频率、四维能力和逐课掌握度检查真实进步。"}</p>
             {active === "today" && <small className="mobile-streak">连续学习第 {data.studyStreak} 天</small>}
           </div>
           <div className="top-actions"><button aria-label="提醒"><Bell size={20} /></button><button aria-label="设置" onClick={() => setActive("settings")}><Settings size={20} /></button></div>
@@ -208,6 +211,8 @@ export function Dashboard({
           />
         ) : active === "vocabulary" ? (
           <VocabularyBook demo={demo} />
+        ) : active === "reading" ? (
+          <Suspense fallback={<section className="module-placeholder"><BookOpen size={48} /><p>正在打开阅读学习…</p></section>}><ReadingStudy demo={demo} /></Suspense>
         ) : active === "word-memory" ? (
           <WordMemory demo={demo} />
         ) : active === "report" ? (
@@ -219,6 +224,7 @@ export function Dashboard({
       <nav className="mobile-bottom-nav" aria-label="移动端主导航">
         <button className={active === "today" ? "active" : ""} onClick={() => setActive("today")}><Sparkles /><span>今日学习</span></button>
         <button className={active === "word-memory" ? "active" : ""} onClick={() => setActive("word-memory")}><LibraryBig /><span>单词记忆</span></button>
+        <button className={active === "reading" ? "active" : ""} onClick={() => setActive("reading")}><BookOpen /><span>阅读</span></button>
         <button className={active === "review" ? "active" : ""} onClick={() => setActive("review")}><ClipboardCheck /><span>复习</span></button>
         <button className={active === "settings" ? "active" : ""} onClick={() => setActive("settings")}><UserRound /><span>我的</span></button>
       </nav>

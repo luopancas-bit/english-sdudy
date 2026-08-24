@@ -4,6 +4,25 @@ import { createDatabase } from "./index.js";
 import { migrate } from "./migrate.js";
 
 describe("database migration", () => {
+  it("adds reading tables without changing existing learner data", async () => {
+    const database = createDatabase("file::memory:");
+    await migrate(database);
+    await database.run(sql`
+      INSERT INTO users (id, username, password_hash, nickname, role, daily_minutes, preferred_accent, created_at, updated_at)
+      VALUES ('reading-user', 'reader', 'hash', '阅读者', 'learner', 25, 'us', '2026-08-18T00:00:00.000Z', '2026-08-18T00:00:00.000Z')
+    `);
+    await database.run(sql`
+      INSERT INTO reading_books (id, owner_id, visibility, source_type, title, language, format, mime_type, created_at, updated_at)
+      VALUES ('reading-book', 'reading-user', 'private', 'upload', 'A Test Book', 'en', 'txt', 'text/plain', '2026-08-18T00:00:00.000Z', '2026-08-18T00:00:00.000Z')
+    `);
+
+    await migrate(database);
+
+    expect(await database.query.users.findFirst()).toMatchObject({ id: "reading-user", nickname: "阅读者" });
+    expect(await database.query.readingBooks.findFirst()).toMatchObject({ id: "reading-book", ownerId: "reading-user", status: "queued" });
+    database.$client.close();
+  });
+
   it("creates assessment drafts idempotently with one draft per user, lesson, and kind", async () => {
     const database = createDatabase("file::memory:");
     await migrate(database);

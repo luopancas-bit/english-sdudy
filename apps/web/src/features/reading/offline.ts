@@ -1,0 +1,7 @@
+import type { ReadingBookDetail } from "../../types";
+
+const databaseName = "zhuguang-reading-v1";
+function openDatabase() { return new Promise<IDBDatabase>((resolve, reject) => { const request = indexedDB.open(databaseName, 1); request.onupgradeneeded = () => request.result.createObjectStore("books"); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); }); }
+export async function cacheReadingBook(detail: ReadingBookDetail) { const database = await openDatabase(); await new Promise<void>((resolve, reject) => { const tx = database.transaction("books", "readwrite"); tx.objectStore("books").put(detail, detail.book.id); tx.oncomplete = () => resolve(); tx.onerror = () => reject(tx.error); }); database.close(); }
+export async function cachedReadingBook(bookId: string) { const database = await openDatabase(); const result = await new Promise<ReadingBookDetail | undefined>((resolve, reject) => { const request = database.transaction("books").objectStore("books").get(bookId); request.onsuccess = () => resolve(request.result as ReadingBookDetail | undefined); request.onerror = () => reject(request.error); }); database.close(); return result; }
+export async function clearOfflineReading() { return new Promise<void>((resolve, reject) => { const request = indexedDB.deleteDatabase(databaseName); request.onsuccess = () => resolve(); request.onerror = () => reject(request.error); }); }

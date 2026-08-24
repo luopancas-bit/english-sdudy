@@ -1,7 +1,9 @@
 services:
   english-study:
-    build: .
-    image: office-english-study:2.2.0-all-lessons
+    build:
+      context: .
+      dockerfile: Dockerfile.runtime-reading
+    image: office-english-study:2.3.0-reading
     container_name: office-english-study-v2
     restart: unless-stopped
     env_file:
@@ -12,9 +14,32 @@ services:
       - ${DATA_ROOT:?set DATA_ROOT}/data:/app/data
       - ${DATA_ROOT:?set DATA_ROOT}/content:/app/content-private:ro
       - ${DATA_ROOT:?set DATA_ROOT}/recordings:/app/recordings
+      - ${DATA_ROOT:?set DATA_ROOT}/reading:/app/reading-data
     read_only: true
     tmpfs:
       - /tmp:size=64m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - office_net
+
+  english-study-reader-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.reader-worker-runtime
+    image: office-english-study-reader-worker:2.3.0-reading
+    container_name: office-english-study-reader-worker
+    restart: unless-stopped
+    env_file:
+      - ${SECRETS_DIR:?set SECRETS_DIR}/english-study-v2.env
+    volumes:
+      - ${DATA_ROOT:?set DATA_ROOT}/data:/app/data
+      - ${DATA_ROOT:?set DATA_ROOT}/reading:/app/reading-data
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m,mode=1777
     security_opt:
       - no-new-privileges:true
     cap_drop:

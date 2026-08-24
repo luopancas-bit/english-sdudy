@@ -22,7 +22,13 @@ data/
 *.db
 *.db-*
 recordings/
+reading-data/
 backups/
+*.epub
+*.mobi
+*.azw
+*.azw3
+*.fb2
 
 # Private or licensed curriculum assets
 content-private/

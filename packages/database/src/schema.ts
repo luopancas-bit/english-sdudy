@@ -319,6 +319,140 @@ export const vocabularyTrainingAttempts = sqliteTable(
   ],
 );
 
+export const readingBooks = sqliteTable(
+  "reading_books",
+  {
+    id: text("id").primaryKey(),
+    ownerId: text("owner_id").references(() => users.id, { onDelete: "cascade" }),
+    visibility: text("visibility", { enum: ["private", "curated", "public"] }).notNull().default("private"),
+    sourceType: text("source_type", { enum: ["upload", "gutenberg", "builtin"] }).notNull(),
+    externalId: text("external_id"),
+    title: text("title").notNull(),
+    titleZh: text("title_zh"),
+    author: text("author"),
+    authorZh: text("author_zh"),
+    description: text("description"),
+    language: text("language").notNull().default("en"),
+    format: text("format").notNull(),
+    originalFilename: text("original_filename"),
+    mimeType: text("mime_type").notNull(),
+    storagePath: text("storage_path"),
+    manifestPath: text("manifest_path"),
+    coverPath: text("cover_path"),
+    byteSize: integer("byte_size").notNull().default(0),
+    derivedByteSize: integer("derived_byte_size").notNull().default(0),
+    sha256: text("sha256"),
+    drmStatus: text("drm_status", { enum: ["none", "protected", "unknown"] }).notNull().default("unknown"),
+    status: text("status", { enum: ["queued", "processing", "ready", "protected", "failed", "deleted"] }).notNull().default("queued"),
+    difficulty: text("difficulty", { enum: ["entry", "intermediate", "challenge"] }),
+    cefrHint: text("cefr_hint"),
+    wordCount: integer("word_count"),
+    chapterCount: integer("chapter_count").notNull().default(0),
+    errorCode: text("error_code"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+    deletedAt: text("deleted_at"),
+  },
+  (table) => [
+    index("reading_books_owner_idx").on(table.ownerId, table.status, table.updatedAt),
+    uniqueIndex("reading_books_external_unique").on(table.sourceType, table.externalId),
+    index("reading_books_visibility_idx").on(table.visibility, table.status, table.updatedAt),
+  ],
+);
+
+export const readingShelves = sqliteTable(
+  "reading_shelves",
+  {
+    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    bookId: text("book_id").notNull().references(() => readingBooks.id, { onDelete: "cascade" }),
+    state: text("state", { enum: ["unread", "reading", "finished", "archived"] }).notNull().default("unread"),
+    currentChapter: integer("current_chapter").notNull().default(0),
+    currentOffset: integer("current_offset").notNull().default(0),
+    progress: real("progress").notNull().default(0),
+    furthestProgress: real("furthest_progress").notNull().default(0),
+    preferences: text("preferences", { mode: "json" }).$type<Record<string, unknown>>().notNull(),
+    addedAt: text("added_at").notNull(),
+    lastReadAt: text("last_read_at"),
+    finishedAt: text("finished_at"),
+  },
+  (table) => [
+    uniqueIndex("reading_shelves_user_book_unique").on(table.userId, table.bookId),
+    index("reading_shelves_recent_idx").on(table.userId, table.lastReadAt),
+  ],
+);
+
+export const readingAnnotations = sqliteTable(
+  "reading_annotations",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    bookId: text("book_id").notNull().references(() => readingBooks.id, { onDelete: "cascade" }),
+    chapterIndex: integer("chapter_index").notNull(),
+    kind: text("kind", { enum: ["bookmark", "highlight", "note", "translation"] }).notNull(),
+    startOffset: integer("start_offset").notNull().default(0),
+    endOffset: integer("end_offset").notNull().default(0),
+    quote: text("quote"),
+    note: text("note"),
+    color: text("color"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [index("reading_annotations_user_book_idx").on(table.userId, table.bookId, table.chapterIndex)],
+);
+
+export const readingVocabularySources = sqliteTable(
+  "reading_vocabulary_sources",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    entryId: text("entry_id").notNull().references(() => vocabularyEntries.id, { onDelete: "cascade" }),
+    bookId: text("book_id").notNull().references(() => readingBooks.id, { onDelete: "cascade" }),
+    chapterIndex: integer("chapter_index").notNull(),
+    sourceForm: text("source_form").notNull(),
+    quote: text("quote").notNull(),
+    startOffset: integer("start_offset").notNull().default(0),
+    createdAt: text("created_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("reading_vocab_source_unique").on(table.userId, table.entryId, table.bookId, table.chapterIndex, table.startOffset),
+    index("reading_vocab_entry_idx").on(table.userId, table.entryId, table.createdAt),
+  ],
+);
+
+export const readingImportJobs = sqliteTable(
+  "reading_import_jobs",
+  {
+    id: text("id").primaryKey(),
+    bookId: text("book_id").notNull().references(() => readingBooks.id, { onDelete: "cascade" }),
+    requestedBy: text("requested_by").references(() => users.id, { onDelete: "set null" }),
+    status: text("status", { enum: ["queued", "processing", "ready", "failed", "cancelled"] }).notNull().default("queued"),
+    progress: integer("progress").notNull().default(0),
+    workerVersion: text("worker_version"),
+    errorCode: text("error_code"),
+    createdAt: text("created_at").notNull(),
+    startedAt: text("started_at"),
+    completedAt: text("completed_at"),
+  },
+  (table) => [index("reading_import_jobs_status_idx").on(table.status, table.createdAt)],
+);
+
+export const readingTranslationUsage = sqliteTable(
+  "reading_translation_usage",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    sentenceHash: text("sentence_hash").notNull(),
+    targetLanguage: text("target_language").notNull().default("zh-CN"),
+    translation: text("translation").notNull(),
+    provider: text("provider").notNull(),
+    occurredAt: text("occurred_at").notNull(),
+  },
+  (table) => [
+    index("reading_translation_user_date_idx").on(table.userId, table.occurredAt),
+    index("reading_translation_cache_idx").on(table.userId, table.sentenceHash, table.targetLanguage),
+  ],
+);
+
 export const wordMemoryTrainingAttempts = sqliteTable(
   "word_memory_training_attempts",
   {

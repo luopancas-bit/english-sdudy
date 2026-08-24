@@ -2,6 +2,10 @@
 data
 design
 dist
+!apps/api/dist/
+!apps/web/dist/
+!packages/database/dist/
+!packages/domain/dist/
 node_modules
 source-materials
 tests

@@ -20,6 +20,7 @@
 | `.env`、AccessKey、密码、Cookie、证书私钥 | 泄露后可控制账号、DNS 或服务器 | 服务器 `/opt/server/configs/secrets/` |
 | SQLite 数据库及 WAL/SHM | 包含账号、成绩、错题和会话 | `/data/share/apps-data/english-study/data/` |
 | 跟读录音 | 属于个人声音与学习隐私 | `/data/share/apps-data/english-study/recordings/` |
+| 用户书籍、阅读笔记与解析结果 | 可能含版权内容和个人阅读隐私 | `/data/share/apps-data/english-study-v2/reading/` 与 SQLite 数据库 |
 | 备份、日志、统计导出 | 可能间接包含身份或令牌 | `/backup/` 与服务器日志目录 |
 | 课文 PDF、单词表、课程音频 | 体积大且可能受版权限制 | 服务器私有内容目录 |
 | 旧版 `app/` 与根目录 `public/` | 含旧实现及与私有课程耦合的资源，不属于重构后的公开边界 | 仅作本地迁移参考，完成切换后删除 |

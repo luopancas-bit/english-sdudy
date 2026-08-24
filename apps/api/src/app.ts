@@ -18,6 +18,7 @@ import { loadConfig, type AppConfig } from "./config.js";
 import { ContentModule } from "./content.js";
 import { syncPublishedDictionaries } from "./dictionary-import.js";
 import { LearningRepository } from "./repository.js";
+import { registerReadingRoutes } from "./reading.js";
 import { hashPassword, hashToken, newOpaqueToken, normalizeUsername, verifyPassword } from "./security.js";
 
 const credentialsSchema = z.object({
@@ -145,6 +146,11 @@ export async function createApp(
     { parseAs: "buffer", bodyLimit: 10_000_000 },
     (_request, body, done) => done(null, body),
   );
+  app.addContentTypeParser(
+    "application/x-ebook",
+    { parseAs: "buffer", bodyLimit: config.READING_MAX_BOOK_BYTES },
+    (_request, body, done) => done(null, body),
+  );
   app.addHook("onClose", async () => {
     database.$client.close();
   });
@@ -226,6 +232,8 @@ export async function createApp(
     }
     current.count += 1;
   }
+
+  await registerReadingRoutes(app, { config, database, requireUser, repository, loadPronunciations });
 
   app.get("/api/health", async (_request, reply) => {
     const course = await content.firstPhaseReadiness(courseLessonIds);

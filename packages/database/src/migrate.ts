@@ -405,4 +405,71 @@ export async function migrate(database: Database): Promise<void> {
     CREATE INDEX IF NOT EXISTS word_review_attempt_state_idx
     ON word_review_attempts(review_id, occurred_at)
   `);
+  await database.run(sql`
+    CREATE TABLE IF NOT EXISTS reading_books (
+      id TEXT PRIMARY KEY, owner_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+      visibility TEXT NOT NULL DEFAULT 'private', source_type TEXT NOT NULL, external_id TEXT,
+      title TEXT NOT NULL, title_zh TEXT, author TEXT, author_zh TEXT, description TEXT,
+      language TEXT NOT NULL DEFAULT 'en', format TEXT NOT NULL, original_filename TEXT,
+      mime_type TEXT NOT NULL, storage_path TEXT, manifest_path TEXT, cover_path TEXT,
+      byte_size INTEGER NOT NULL DEFAULT 0, derived_byte_size INTEGER NOT NULL DEFAULT 0,
+      sha256 TEXT, drm_status TEXT NOT NULL DEFAULT 'unknown', status TEXT NOT NULL DEFAULT 'queued',
+      difficulty TEXT, cefr_hint TEXT, word_count INTEGER, chapter_count INTEGER NOT NULL DEFAULT 0,
+      error_code TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, deleted_at TEXT,
+      UNIQUE(source_type, external_id)
+    )
+  `);
+  await database.run(sql`CREATE INDEX IF NOT EXISTS reading_books_owner_idx ON reading_books(owner_id, status, updated_at)`);
+  await database.run(sql`CREATE INDEX IF NOT EXISTS reading_books_visibility_idx ON reading_books(visibility, status, updated_at)`);
+  await database.run(sql`
+    CREATE TABLE IF NOT EXISTS reading_shelves (
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      book_id TEXT NOT NULL REFERENCES reading_books(id) ON DELETE CASCADE,
+      state TEXT NOT NULL DEFAULT 'unread', current_chapter INTEGER NOT NULL DEFAULT 0,
+      current_offset INTEGER NOT NULL DEFAULT 0, progress REAL NOT NULL DEFAULT 0,
+      furthest_progress REAL NOT NULL DEFAULT 0, preferences TEXT NOT NULL DEFAULT '{}',
+      added_at TEXT NOT NULL, last_read_at TEXT, finished_at TEXT,
+      UNIQUE(user_id, book_id)
+    )
+  `);
+  await database.run(sql`CREATE INDEX IF NOT EXISTS reading_shelves_recent_idx ON reading_shelves(user_id, last_read_at)`);
+  await database.run(sql`
+    CREATE TABLE IF NOT EXISTS reading_annotations (
+      id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      book_id TEXT NOT NULL REFERENCES reading_books(id) ON DELETE CASCADE,
+      chapter_index INTEGER NOT NULL, kind TEXT NOT NULL, start_offset INTEGER NOT NULL DEFAULT 0,
+      end_offset INTEGER NOT NULL DEFAULT 0, quote TEXT, note TEXT, color TEXT,
+      created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+    )
+  `);
+  await database.run(sql`CREATE INDEX IF NOT EXISTS reading_annotations_user_book_idx ON reading_annotations(user_id, book_id, chapter_index)`);
+  await database.run(sql`
+    CREATE TABLE IF NOT EXISTS reading_vocabulary_sources (
+      id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      entry_id TEXT NOT NULL REFERENCES vocabulary_entries(id) ON DELETE CASCADE,
+      book_id TEXT NOT NULL REFERENCES reading_books(id) ON DELETE CASCADE,
+      chapter_index INTEGER NOT NULL, source_form TEXT NOT NULL, quote TEXT NOT NULL,
+      start_offset INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL,
+      UNIQUE(user_id, entry_id, book_id, chapter_index, start_offset)
+    )
+  `);
+  await database.run(sql`CREATE INDEX IF NOT EXISTS reading_vocab_entry_idx ON reading_vocabulary_sources(user_id, entry_id, created_at)`);
+  await database.run(sql`
+    CREATE TABLE IF NOT EXISTS reading_import_jobs (
+      id TEXT PRIMARY KEY, book_id TEXT NOT NULL REFERENCES reading_books(id) ON DELETE CASCADE,
+      requested_by TEXT REFERENCES users(id) ON DELETE SET NULL, status TEXT NOT NULL DEFAULT 'queued',
+      progress INTEGER NOT NULL DEFAULT 0, worker_version TEXT, error_code TEXT,
+      created_at TEXT NOT NULL, started_at TEXT, completed_at TEXT
+    )
+  `);
+  await database.run(sql`CREATE INDEX IF NOT EXISTS reading_import_jobs_status_idx ON reading_import_jobs(status, created_at)`);
+  await database.run(sql`
+    CREATE TABLE IF NOT EXISTS reading_translation_usage (
+      id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      sentence_hash TEXT NOT NULL, target_language TEXT NOT NULL DEFAULT 'zh-CN',
+      translation TEXT NOT NULL, provider TEXT NOT NULL, occurred_at TEXT NOT NULL
+    )
+  `);
+  await database.run(sql`CREATE INDEX IF NOT EXISTS reading_translation_user_date_idx ON reading_translation_usage(user_id, occurred_at)`);
+  await database.run(sql`CREATE INDEX IF NOT EXISTS reading_translation_cache_idx ON reading_translation_usage(user_id, sentence_hash, target_language)`);
 }

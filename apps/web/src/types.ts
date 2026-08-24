@@ -396,3 +396,24 @@ export interface LearningReportData {
     updatedAt: string;
   }>;
 }
+
+export type ReadingBookStatus = "queued" | "processing" | "ready" | "protected" | "failed" | "deleted";
+export interface ReadingBook {
+  id: string; title: string; titleZh: string | null; author: string | null; description: string | null;
+  language: string; format: string; visibility: "private" | "curated" | "public"; sourceType: "upload" | "gutenberg" | "builtin";
+  status: ReadingBookStatus; difficulty: "entry" | "intermediate" | "challenge" | null; cefrHint: string | null;
+  wordCount: number | null; chapterCount: number; byteSize: number; drmStatus: "none" | "protected" | "unknown";
+  progress: number; furthestProgress: number; currentChapter: number; lastReadAt: string | null;
+  preferences: ReadingPreferences;
+}
+export interface ReadingPreferences { mode: "scroll" | "paged"; fontScale: number; lineHeight: number; theme: "paper" | "white" | "sepia" | "dark"; publisherStyles: boolean; }
+export interface ReadingLibraryData {
+  enabled: boolean; uploadEnabled: boolean; role: "learner" | "admin";
+  quota: { books: number; maxBooks: number; bytes: number; maxBytes: number };
+  books: ReadingBook[]; continueReading: string | null;
+}
+export interface ReadingManifest { version: 1; title: string; chapters: Array<{ title: string; text: string }> }
+export interface ReadingAnnotation { id: string; bookId: string; chapterIndex: number; kind: "bookmark" | "highlight" | "note" | "translation"; startOffset: number; endOffset: number; quote: string | null; note: string | null; color: string | null; createdAt: string; updatedAt: string; }
+export interface ReadingBookDetail { book: ReadingBook; annotations: ReadingAnnotation[]; manifest: ReadingManifest | null; }
+export interface ReadingLookupResult { term: string; lemma: string; pronunciation: PronunciationData | null; meanings: Array<{ partOfSpeech: string | null; definition: string }>; source: string; }
+export interface GutenbergBook { id: string; title: string; author: string; downloadUrl: string | null; sourceUrl: string | null; }

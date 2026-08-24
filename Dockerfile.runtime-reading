@@ -1,0 +1,14 @@
+FROM office-english-study:2.2.0-all-lessons
+
+USER root
+
+COPY --chown=zhuguang:zhuguang apps/api/dist/ /app/apps/api/dist/
+COPY --chown=zhuguang:zhuguang apps/api/package.json /app/apps/api/package.json
+COPY --chown=zhuguang:zhuguang apps/web/dist/ /app/apps/web/dist/
+COPY --chown=zhuguang:zhuguang packages/database/ /app/packages/database/
+COPY --chown=zhuguang:zhuguang packages/domain/ /app/packages/domain/
+
+USER zhuguang
+
+EXPOSE 8787
+CMD ["node", "apps/api/dist/server.js"]

@@ -1,0 +1,29 @@
+FROM office-english-study:2.2.0-all-lessons AS app-runtime
+
+FROM crocodilestick/calibre-web-automated:latest
+
+USER root
+
+ENV LD_LIBRARY_PATH=/app/calibre/lib \
+    HOME=/tmp \
+    CALIBRE_CONFIG_DIRECTORY=/tmp/calibre
+
+RUN if ! getent group 10001 >/dev/null; then groupadd --gid 10001 zhuguang; fi \
+    && if ! getent passwd 10001 >/dev/null; then useradd --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin zhuguang; fi
+
+COPY --from=app-runtime /usr/local/bin/node /usr/local/bin/node
+COPY --from=app-runtime /app/node_modules/ /app/node_modules/
+COPY --from=app-runtime /app/apps/api/node_modules/ /app/apps/api/node_modules/
+COPY --chown=10001:10001 apps/api/dist/ /app/apps/api/dist/
+COPY --chown=10001:10001 apps/api/package.json /app/apps/api/package.json
+COPY --chown=10001:10001 packages/database/ /app/packages/database/
+COPY --chown=10001:10001 packages/domain/ /app/packages/domain/
+COPY --from=app-runtime --chown=10001:10001 /app/packages/database/node_modules/ /app/packages/database/node_modules/
+COPY --from=app-runtime --chown=10001:10001 /app/packages/domain/node_modules/ /app/packages/domain/node_modules/
+
+USER 10001:10001
+
+WORKDIR /app
+ENTRYPOINT []
+HEALTHCHECK NONE
+CMD ["/usr/local/bin/node", "/app/apps/api/dist/reading-worker.js"]

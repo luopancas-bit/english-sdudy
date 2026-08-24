@@ -58,6 +58,8 @@ export function App() {
       }}
       onLogout={async () => {
         if (!state.demo) await api.logout();
+        const { clearOfflineReading } = await import("./features/reading/offline");
+        await clearOfflineReading().catch(() => undefined);
         setState({ status: "anonymous" });
       }}
     />

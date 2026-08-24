@@ -1,0 +1,27 @@
+FROM node:24-bookworm-slim AS build
+WORKDIR /app
+RUN corepack enable
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
+COPY apps/api/package.json apps/api/package.json
+COPY apps/web/package.json apps/web/package.json
+COPY packages/domain/package.json packages/domain/package.json
+COPY packages/database/package.json packages/database/package.json
+RUN pnpm install --frozen-lockfile
+COPY apps ./apps
+COPY packages ./packages
+RUN pnpm --filter @zhuguang/database build && pnpm --filter @zhuguang/api build
+
+FROM node:24-bookworm-slim
+WORKDIR /app
+ENV NODE_ENV=production
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends calibre poppler-utils \
+  && rm -rf /var/lib/apt/lists/* \
+  && groupadd --gid 10001 zhuguang \
+  && useradd --uid 10001 --gid zhuguang --home-dir /app --shell /usr/sbin/nologin zhuguang
+COPY --from=build --chown=zhuguang:zhuguang /app/node_modules ./node_modules
+COPY --from=build --chown=zhuguang:zhuguang /app/apps/api/node_modules ./apps/api/node_modules
+COPY --from=build --chown=zhuguang:zhuguang /app/apps/api/dist ./apps/api/dist
+COPY --from=build --chown=zhuguang:zhuguang /app/packages ./packages
+USER zhuguang
+CMD ["node", "apps/api/dist/reading-worker.js"]

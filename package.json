@@ -15,6 +15,7 @@
     "dictionary:scan": "node scripts/dictionary/import-mdict.mjs scan",
     "dictionary:publish": "node scripts/dictionary/import-mdict.mjs publish",
     "phonetics:import": "node scripts/dictionary/import-free-phonetics.mjs",
+    "reading:worker": "pnpm --filter @zhuguang/api build && node apps/api/dist/reading-worker.js",
     "check": "pnpm build && pnpm typecheck && pnpm test"
   },
   "devDependencies": {

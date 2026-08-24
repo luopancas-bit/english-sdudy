@@ -131,6 +131,16 @@ describe("learning account flow", () => {
       DATABASE_URL: databaseUrl,
       CONTENT_DIR: contentDirectory,
       RECORDINGS_DIR: path.join(directory, "recordings"),
+      READING_DIR: path.join(directory, "reading"),
+      READING_ENABLED: true,
+      READING_UPLOAD_ENABLED: true,
+      READING_MAX_BOOK_BYTES: 300 * 1024 * 1024,
+      READING_MAX_USER_BYTES: 5 * 1024 * 1024 * 1024,
+      READING_MAX_USER_BOOKS: 100,
+      READING_TRANSLATION_DAILY_LIMIT: 100,
+      TRANSLATION_BASE_URL: undefined,
+      TRANSLATION_API_KEY: undefined,
+      TRANSLATION_MODEL: "translation-model",
       COURSE_LESSON_COUNT: 3,
       SESSION_COOKIE_NAME: "test_session",
       SESSION_COOKIE_SECURE: false,
@@ -161,6 +171,25 @@ describe("learning account flow", () => {
     });
     expect(profile.statusCode).toBe(200);
     expect(profile.json()).toMatchObject({ nickname: "逐光同学", dailyMinutes: 30, preferredAccent: "uk" });
+
+    const masteryBeforeReading = (await app.inject({ method: "GET", url: "/api/dashboard", headers: { cookie } })).json().longTermMastery;
+    const readingLibrary = await app.inject({ method: "GET", url: "/api/reading/library", headers: { cookie } });
+    expect(readingLibrary.statusCode).toBe(200);
+    expect(readingLibrary.json().books).toHaveLength(12);
+    const upload = await app.inject({
+      method: "POST",
+      url: "/api/reading/books",
+      headers: { cookie, "content-type": "application/x-ebook", "x-book-filename": encodeURIComponent("Courage.txt") },
+      payload: Buffer.from("Chapter I\n\nCourage is not the absence of fear. It is choosing to continue."),
+    });
+    expect(upload.statusCode).toBe(201);
+    expect(upload.json()).toMatchObject({ status: "ready" });
+    const uploadedBook = await app.inject({ method: "GET", url: `/api/reading/books/${upload.json().id}`, headers: { cookie } });
+    expect(uploadedBook.statusCode).toBe(200);
+    expect(uploadedBook.json()).toMatchObject({ book: { title: "Courage", status: "ready", visibility: "private" }, manifest: { version: 1 } });
+    await app.inject({ method: "PATCH", url: `/api/reading/books/${upload.json().id}/progress`, headers: { cookie }, payload: { chapterIndex: 0, offset: 10, progress: 60 } });
+    const masteryAfterReading = (await app.inject({ method: "GET", url: "/api/dashboard", headers: { cookie } })).json().longTermMastery;
+    expect(masteryAfterReading).toBe(masteryBeforeReading);
 
     const secondLogin = await app.inject({
       method: "POST",

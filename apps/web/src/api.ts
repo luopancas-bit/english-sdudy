@@ -1,4 +1,4 @@
-import type { AccountSession, Assessment, AssessmentDraft, AttemptResult, CourseMapData, DashboardData, DictionaryStatusData, LearningReportData, LessonContent, RecordingReceipt, ReviewCenterData, User, VocabularyData, VocabularyEntry, VocabularyInput, VocabularyTrainingInput, WordAssessment, WordAssessmentResult, WordMemoryChapter, WordMemoryStats, WordReviewResult, WordReviewsData } from "./types";
+import type { AccountSession, Assessment, AssessmentDraft, AttemptResult, CourseMapData, DashboardData, DictionaryStatusData, GutenbergBook, LearningReportData, LessonContent, ReadingAnnotation, ReadingBookDetail, ReadingLibraryData, ReadingLookupResult, ReadingPreferences, RecordingReceipt, ReviewCenterData, User, VocabularyData, VocabularyEntry, VocabularyInput, VocabularyTrainingInput, WordAssessment, WordAssessmentResult, WordMemoryChapter, WordMemoryStats, WordReviewResult, WordReviewsData } from "./types";
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, {
@@ -50,6 +50,22 @@ export const api = {
   dashboard: () => request<DashboardData>("/api/dashboard"),
   courseMap: () => request<CourseMapData>("/api/course-map"),
   learningReport: () => request<LearningReportData>("/api/learning-report"),
+  readingLibrary: () => request<ReadingLibraryData>("/api/reading/library"),
+  readingBook: (bookId: string) => request<ReadingBookDetail>(`/api/reading/books/${bookId}`),
+  uploadReadingBook: async (file: File) => {
+    const response = await fetch("/api/reading/books", { method: "POST", credentials: "include", headers: { "Content-Type": "application/x-ebook", "X-Book-Filename": encodeURIComponent(file.name) }, body: file });
+    const body = await response.json().catch(() => ({})) as { id?: string; status?: string; error?: string };
+    if (!response.ok) throw new Error(body.error || "书籍上传失败"); return body;
+  },
+  saveReadingProgress: (bookId: string, input: { chapterIndex: number; offset: number; progress: number; preferences?: ReadingPreferences }) => request<{ ok: true; lastReadAt: string }>(`/api/reading/books/${bookId}/progress`, { method: "PATCH", body: JSON.stringify(input) }),
+  addReadingAnnotation: (bookId: string, input: Omit<ReadingAnnotation, "id" | "bookId" | "createdAt" | "updatedAt">) => request<ReadingAnnotation>(`/api/reading/books/${bookId}/annotations`, { method: "POST", body: JSON.stringify(input) }),
+  deleteReadingAnnotation: (annotationId: string) => request<{ ok: true }>(`/api/reading/annotations/${annotationId}`, { method: "DELETE" }),
+  lookupReadingTerm: (term: string) => request<ReadingLookupResult>("/api/reading/lookup", { method: "POST", body: JSON.stringify({ term }) }),
+  translateReadingText: (text: string) => request<{ translation: string; cached: boolean; remaining: number }>("/api/reading/translate", { method: "POST", body: JSON.stringify({ text, targetLanguage: "zh-CN" }) }),
+  addReadingVocabulary: (input: { term: string; meaning: string; bookId: string; chapterIndex: number; sourceForm: string; quote: string; startOffset: number }) => request<{ entryId: string; alreadyExisted: boolean }>("/api/reading/vocabulary-sources", { method: "POST", body: JSON.stringify(input) }),
+  searchReadingCatalog: (query: string) => request<{ books: GutenbergBook[] }>(`/api/reading/catalog/search?q=${encodeURIComponent(query)}`),
+  addReadingCatalogBook: (book: GutenbergBook) => request<{ book: ReadingLibraryData["books"][number] | null }>("/api/reading/catalog/books", { method: "POST", body: JSON.stringify({ id: book.id, title: book.title, author: book.author || null }) }),
+  readingAdminJobs: () => request<{ jobs: Array<{ id: string; bookId: string; status: string; progress: number; errorCode: string | null; createdAt: string }> }>("/api/reading/admin/jobs"),
   vocabulary: () => request<VocabularyData>("/api/vocabulary"),
   dictionaryStatus: () => request<DictionaryStatusData>("/api/dictionaries/status"),
   addVocabulary: (input: VocabularyInput) =>
