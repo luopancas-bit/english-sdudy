@@ -5,6 +5,7 @@ FROM crocodilestick/calibre-web-automated:latest
 USER root
 
 ENV LD_LIBRARY_PATH=/app/calibre/lib \
+    PATH=/app/calibre/bin:${PATH} \
     HOME=/tmp \
     CALIBRE_CONFIG_DIRECTORY=/tmp/calibre
 
