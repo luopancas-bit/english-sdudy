@@ -18,6 +18,7 @@ import type { LearningRepository } from "./repository.js";
 import { buildReadingManifest, sanitizeReadingText } from "./reading-content.js";
 import {
   assessTranslationQuality,
+  extractTranslationText,
   normalizeTranslationInput,
   READING_TRANSLATION_NORMALIZATION_VERSION,
   READING_TRANSLATION_PROMPT_VERSION,
@@ -265,8 +266,8 @@ async function requestTranslation(config: AppConfig, text: string, retry: boolea
     signal: AbortSignal.timeout(15_000),
   });
   if (!response.ok) throw new Error(`translation_${response.status}`);
-  const result = await response.json() as { choices?: Array<{ message?: { content?: string }; finish_reason?: string }> };
-  const choice = result.choices?.[0]; const translation = choice?.message?.content?.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+  const result = await response.json() as { choices?: Array<{ message?: { content?: unknown }; finish_reason?: string }> };
+  const choice = result.choices?.[0]; const translation = extractTranslationText(choice?.message?.content).replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
   if (!translation) throw new Error("translation_empty");
   return choice?.finish_reason ? { translation, finishReason: choice.finish_reason } : { translation };
 }

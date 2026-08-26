@@ -13,6 +13,19 @@ export function normalizeTranslationInput(value: string): string {
   return value.replace(/\r\n?/g, "\n").trim().replace(/\s+/g, " ");
 }
 
+export function extractTranslationText(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (!Array.isArray(value)) return "";
+  return value.map((part) => {
+    if (typeof part === "string") return part;
+    if (!part || typeof part !== "object") return "";
+    const typedPart = part as { type?: unknown; text?: unknown };
+    if (typedPart.type !== undefined && typedPart.type !== "text") return "";
+    const text = typedPart.text;
+    return typeof text === "string" ? text : "";
+  }).join("");
+}
+
 export type TranslationQuality = { ok: true } | { ok: false; reason: "empty" | "truncated" | "wrapper" | "fragment" | "untranslated" | "english_tail" | "repeated" };
 
 export function assessTranslationQuality(input: string, output: string, finishReason?: string): TranslationQuality {

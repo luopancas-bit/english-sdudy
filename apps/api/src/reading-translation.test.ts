@@ -1,9 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { assessTranslationQuality, normalizeTranslationInput } from "./reading-translation.js";
+import { assessTranslationQuality, extractTranslationText, normalizeTranslationInput } from "./reading-translation.js";
 
 describe("reading translation quality", () => {
   it("normalizes whitespace without changing the sentence meaning", () => {
     expect(normalizeTranslationInput("  If you\r\n are located   here. ")).toBe("If you are located here.");
+  });
+
+  it("accepts string and block-style provider content", () => {
+    expect(extractTranslationText("早餐前雨停了。")).toBe("早餐前雨停了。");
+    expect(extractTranslationText([{ type: "text", text: "早餐前" }, { type: "text", text: "雨停了。" }])).toBe("早餐前雨停了。");
+    expect(extractTranslationText([{ type: "reasoning", text: "ignored by the caller" }, { type: "text", text: "她打开了窗户。" }])).toBe("她打开了窗户。");
+    expect(extractTranslationText({ text: "not a message content array" })).toBe("");
   });
 
   it("rejects a truncated English tail", () => {
