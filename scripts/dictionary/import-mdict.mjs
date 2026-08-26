@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { MDX, MDD } from "js-mdict";
+import { cleanDictionaryDefinition, dictionaryResourceReferences, isAllowedDictionaryResourceKey } from "./mdict-safety.mjs";
 
 const [command = "", ...rawArguments] = process.argv.slice(2);
 const argumentsMap = new Map(rawArguments.filter((value) => value.startsWith("--")).map((value) => {
@@ -60,7 +61,7 @@ async function scan() {
       const us = extractPhonetics(html, profile.usPatterns);
       const uk = extractPhonetics(html, profile.ukPatterns);
       const partOfSpeech = extractFirst(html, profile.partOfSpeechPatterns);
-      const resourceKeys = resourceReferences(html);
+      const resourceKeys = dictionaryResourceReferences(html);
       const audioResourceKey = (accent) => resourceKeys.find((key) => {
         const lower = key.toLocaleLowerCase("en-US");
         return /\.(?:mp3|m4a|ogg|wav|spx)$/u.test(lower)
@@ -90,7 +91,7 @@ async function scan() {
       entries.push({
         key: keyword.keyText,
         term: keyword.keyText.trim(),
-        definition: cleanDefinition(html),
+        definition: cleanDictionaryDefinition(html),
         partOfSpeech,
         rawNotation: [...us, ...uk].join("; ") || null,
         pronunciations,
@@ -219,39 +220,8 @@ function extractFirst(html, patterns) {
   return null;
 }
 
-function cleanDefinition(html) {
-  const safe = html
-    .replace(/<script\b[\s\S]*?<\/script\s*>/giu, " ")
-    .replace(/<style\b[\s\S]*?<\/style\s*>/giu, " ")
-    .replace(/<link\b[^>]*>/giu, " ")
-    .replace(/<(?:iframe|object|embed|form)\b[\s\S]*?<\/(?:iframe|object|embed|form)\s*>/giu, " ")
-    .replace(/\son[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/giu, "")
-    .replace(/\sstyle\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/giu, "")
-    .replace(/(?:javascript|data):/giu, "");
-  return textContent(safe).replace(/\s+/g, " ").trim().slice(0, 10_000) || null;
-}
-
-function textContent(value) {
-  return value.replace(/<[^>]*>/g, " ")
-    .replace(/&nbsp;/giu, " ").replace(/&amp;/giu, "&").replace(/&lt;/giu, "<").replace(/&gt;/giu, ">").replace(/&quot;/giu, '"').replace(/&#39;/giu, "'");
-}
-
-function resourceReferences(html) {
-  const result = new Set();
-  for (const match of html.matchAll(/(?:sound:\/\/|(?:src|href)\s*=\s*["'])([^"'<>]+)["']?/giu)) {
-    const key = match[1]?.trim().replace(/^sound:\/\//iu, "");
-    if (key && isAllowedResourceKey(key)) result.add(key);
-  }
-  return Array.from(result);
-}
-
-function isAllowedResourceKey(key) {
-  if (key.includes("..") || /^[a-z]+:\/\//i.test(key)) return false;
-  return /\.(?:mp3|m4a|ogg|wav|spx|png|jpe?g|gif|webp|svg|woff2?|ttf)$/i.test(key);
-}
-
 async function extractResource(mddReaders, key, directory) {
-  if (!isAllowedResourceKey(key)) return { status: "rejected" };
+  if (!isAllowedDictionaryResourceKey(key)) return { status: "rejected" };
   const candidates = [key, key.startsWith("\\") ? key : `\\${key}`, key.replaceAll("/", "\\")];
   let encoded = null;
   const transformedKey = "\\" + key.replaceAll("/", "\\_");
