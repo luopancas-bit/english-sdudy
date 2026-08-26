@@ -106,6 +106,13 @@ TRANSLATION_API_KEY=replace-with-server-secret
 TRANSLATION_MODEL=translation-model
 ```
 
+### 考核音频的分段播放
+
+听写题使用课程音频中的句子时间段，浏览器通过 `Range: bytes=start-end` 请求音频；API
+必须返回 `206`、`Accept-Ranges: bytes`、正确的 `Content-Range` 和片段长度。无效范围返回
+`416`，不能退回整段音频，否则播放器会从课程开头重复播放。单词、短语和课程音频接口统一
+遵守这一合同；部署后先通过自动化测试，再核对容器内 API 静态包与公网健康检查。
+
 ## 更新
 
 更新前记录当前提交：
