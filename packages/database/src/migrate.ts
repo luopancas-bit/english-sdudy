@@ -3,6 +3,7 @@ import type { Database } from "./index.js";
 
 export async function migrate(database: Database): Promise<void> {
   await database.run(sql`PRAGMA journal_mode = WAL`);
+  await database.run(sql`PRAGMA busy_timeout = 30000`);
   await database.run(sql`PRAGMA foreign_keys = ON`);
   await database.run(sql`
     CREATE TABLE IF NOT EXISTS users (
@@ -467,9 +468,41 @@ export async function migrate(database: Database): Promise<void> {
     CREATE TABLE IF NOT EXISTS reading_translation_usage (
       id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       sentence_hash TEXT NOT NULL, target_language TEXT NOT NULL DEFAULT 'zh-CN',
-      translation TEXT NOT NULL, provider TEXT NOT NULL, occurred_at TEXT NOT NULL
+      translation TEXT NOT NULL, provider TEXT NOT NULL,
+      model_version TEXT NOT NULL DEFAULT 'legacy',
+      prompt_version TEXT NOT NULL DEFAULT 'reading-translation-v1',
+      normalization_version TEXT NOT NULL DEFAULT 'legacy',
+      input_length INTEGER NOT NULL DEFAULT 0,
+      output_length INTEGER NOT NULL DEFAULT 0,
+      duration_ms INTEGER NOT NULL DEFAULT 0,
+      retry_count INTEGER NOT NULL DEFAULT 0,
+      finish_reason TEXT,
+      quality_status TEXT NOT NULL DEFAULT 'passed',
+      occurred_at TEXT NOT NULL
     )
   `);
+  await addColumnIfMissing(database, "reading_translation_usage", "model_version", "TEXT NOT NULL DEFAULT 'legacy'");
+  await addColumnIfMissing(database, "reading_translation_usage", "prompt_version", "TEXT NOT NULL DEFAULT 'reading-translation-v1'");
+  await addColumnIfMissing(database, "reading_translation_usage", "normalization_version", "TEXT NOT NULL DEFAULT 'legacy'");
+  await addColumnIfMissing(database, "reading_translation_usage", "input_length", "INTEGER NOT NULL DEFAULT 0");
+  await addColumnIfMissing(database, "reading_translation_usage", "output_length", "INTEGER NOT NULL DEFAULT 0");
+  await addColumnIfMissing(database, "reading_translation_usage", "duration_ms", "INTEGER NOT NULL DEFAULT 0");
+  await addColumnIfMissing(database, "reading_translation_usage", "retry_count", "INTEGER NOT NULL DEFAULT 0");
+  await addColumnIfMissing(database, "reading_translation_usage", "finish_reason", "TEXT");
+  await addColumnIfMissing(database, "reading_translation_usage", "quality_status", "TEXT NOT NULL DEFAULT 'passed'");
   await database.run(sql`CREATE INDEX IF NOT EXISTS reading_translation_user_date_idx ON reading_translation_usage(user_id, occurred_at)`);
   await database.run(sql`CREATE INDEX IF NOT EXISTS reading_translation_cache_idx ON reading_translation_usage(user_id, sentence_hash, target_language)`);
+}
+
+async function addColumnIfMissing(database: Database, table: string, column: string, definition: string): Promise<void> {
+  const result = await database.$client.execute(`PRAGMA table_info(${table})`);
+  const exists = result.rows.some((row) => Array.isArray(row) ? String(row[1]) === column : String((row as Record<string, unknown>).name) === column);
+  if (exists) return;
+  try {
+    await database.run(sql.raw(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`));
+  } catch (error) {
+    const cause = error instanceof Error ? error.cause : undefined;
+    const message = `${String(error)} ${String(cause)}`.toLowerCase();
+    if (!message.includes("duplicate column")) throw error;
+  }
 }

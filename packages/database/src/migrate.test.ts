@@ -4,6 +4,29 @@ import { createDatabase } from "./index.js";
 import { migrate } from "./migrate.js";
 
 describe("database migration", () => {
+  it("upgrades the legacy translation cache without deleting rows", async () => {
+    const database = createDatabase("file::memory:");
+    await database.run(sql`
+      CREATE TABLE reading_translation_usage (
+        id TEXT PRIMARY KEY, user_id TEXT NOT NULL, sentence_hash TEXT NOT NULL,
+        target_language TEXT NOT NULL DEFAULT 'zh-CN', translation TEXT NOT NULL,
+        provider TEXT NOT NULL, occurred_at TEXT NOT NULL
+      )
+    `);
+    await database.run(sql`
+      INSERT INTO reading_translation_usage (id, user_id, sentence_hash, translation, provider, occurred_at)
+      VALUES ('legacy-translation', 'legacy-user', 'old-hash', '旧译文', 'legacy-model', '2026-08-18T00:00:00.000Z')
+    `);
+
+    await migrate(database);
+
+    const row = await database.run(sql`SELECT * FROM reading_translation_usage WHERE id = 'legacy-translation'`);
+    expect(row.rows).toHaveLength(1);
+    expect(row.rows[0]?.model_version).toBe("legacy");
+    expect(row.rows[0]?.prompt_version).toBe("reading-translation-v1");
+    database.$client.close();
+  });
+
   it("adds reading tables without changing existing learner data", async () => {
     const database = createDatabase("file::memory:");
     await migrate(database);
@@ -17,6 +40,8 @@ describe("database migration", () => {
     `);
 
     await migrate(database);
+    const timeout = await database.run(sql`PRAGMA busy_timeout`);
+    expect(timeout.rows[0]?.timeout).toBe(30000);
 
     expect(await database.query.users.findFirst()).toMatchObject({ id: "reading-user", nickname: "阅读者" });
     expect(await database.query.readingBooks.findFirst()).toMatchObject({ id: "reading-book", ownerId: "reading-user", status: "queued" });

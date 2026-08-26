@@ -176,7 +176,7 @@ describe("learning account flow", () => {
     const readingLibrary = await app.inject({ method: "GET", url: "/api/reading/library", headers: { cookie } });
     expect(readingLibrary.statusCode).toBe(200);
     expect(readingLibrary.json().books).toHaveLength(12);
-    expect(readingLibrary.json().books.every((book: { externalId: string | null; shelved: boolean }) => Boolean(book.externalId) && !book.shelved)).toBe(true);
+    expect(readingLibrary.json().books.every((book: { externalId: string | null; sourceType: string; shelved: boolean }) => Boolean(book.externalId) && book.sourceType === "builtin" && !book.shelved)).toBe(true);
     expect(await database.query.readingImportJobs.findMany()).toHaveLength(0);
     const upload = await app.inject({
       method: "POST",

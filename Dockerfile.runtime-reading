@@ -7,6 +7,7 @@ COPY --chown=zhuguang:zhuguang apps/api/package.json /app/apps/api/package.json
 COPY --chown=zhuguang:zhuguang apps/web/dist/ /app/apps/web/dist/
 COPY --chown=zhuguang:zhuguang packages/database/ /app/packages/database/
 COPY --chown=zhuguang:zhuguang packages/domain/ /app/packages/domain/
+COPY --chown=zhuguang:zhuguang reading-samples/ /app/reading-samples/
 
 USER zhuguang
 

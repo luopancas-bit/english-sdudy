@@ -7,7 +7,7 @@
 ## 书籍来源与格式
 
 - 本地导入：EPUB、PDF、TXT、MOBI、AZW/AZW3、FB2、HTML、Markdown、DOCX、RTF。
-- 精选书库：内置 12 本 Project Gutenberg 公版英文原著目录，仅展示可选书目；用户点击“加入书架”后才创建下载任务，再由独立 worker 下载并解析。这样服务器无法访问 Gutenberg 时不会自动堆积失败任务。
+- 精选书库：内置 12 本 Project Gutenberg 公版英文原著 EPUB，随 worker 镜像部署并在本地解析，不依赖服务器访问 Gutenberg；用户点击“加入书架”后即可开始阅读。
 - 在线搜索：Project Gutenberg OPDS；用户确认“加入书架”后才下载。
 - PDF 第一版保留文本顺序并提供阅读排版，不对扫描图片自动 OCR。
 - DRM/密码保护文件允许上传，但系统只标记为“受保护”，不破解、不移除 DRM，也不提供绕过工具。
@@ -35,3 +35,8 @@
 
 `READING_ENABLED=false` 会停用全部阅读 API，入口会显示模块不可用；`READING_UPLOAD_ENABLED=false` 只关闭用户上传。
 关闭功能不会删除阅读表或数据卷。部署、备份和回滚命令见 `docs/deployment-runbook.md`。
+
+## 下一轮改进
+
+句子边界、Gutenberg 正文清理、翻译质量门禁和版本化缓存的下一轮实施与验收标准，见
+[阅读翻译质量下一轮改进规范](reading-translation-quality-improvement-plan.md)。代码与回归测试已落地，生产状态以部署验收为准。

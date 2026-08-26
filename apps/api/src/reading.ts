@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { and, desc, eq, gte, isNull } from "drizzle-orm";
+import { and, desc, eq, gte } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import {
   readingAnnotations,
@@ -15,10 +15,18 @@ import {
 import { z } from "zod";
 import type { AppConfig } from "./config.js";
 import type { LearningRepository } from "./repository.js";
+import { buildReadingManifest, sanitizeReadingText } from "./reading-content.js";
+import {
+  assessTranslationQuality,
+  normalizeTranslationInput,
+  READING_TRANSLATION_NORMALIZATION_VERSION,
+  READING_TRANSLATION_PROMPT_VERSION,
+  READING_TRANSLATION_SYSTEM_PROMPT,
+} from "./reading-translation.js";
 
 type SessionUser = { id: string; role: string };
 type RequireUser = (request: FastifyRequest, reply: FastifyReply) => Promise<SessionUser | null | undefined>;
-type Manifest = { version: 1; title: string; chapters: Array<{ title: string; text: string }> };
+type Manifest = ReturnType<typeof buildReadingManifest>;
 
 const allowedFormats = new Set(["epub", "pdf", "txt", "mobi", "azw", "azw3", "fb2", "html", "htm", "md", "markdown", "docx", "rtf"]);
 const progressSchema = z.object({
@@ -162,17 +170,25 @@ export async function registerReadingRoutes(app: FastifyInstance, input: {
 
   app.post("/api/reading/translate", async (request, reply) => {
     const user = await requireUser(request, reply); if (!user) return;
-    const body = translateSchema.parse(request.body); const hash = crypto.createHash("sha256").update(body.text).digest("hex");
-    const cached = await database.query.readingTranslationUsage.findFirst({ where: and(eq(readingTranslationUsage.userId, user.id), eq(readingTranslationUsage.sentenceHash, hash), eq(readingTranslationUsage.targetLanguage, body.targetLanguage)), orderBy: [desc(readingTranslationUsage.occurredAt)] });
-    if (cached) return { translation: cached.translation, cached: true, remaining: config.READING_TRANSLATION_DAILY_LIMIT };
+    const body = translateSchema.parse(request.body); const text = normalizeTranslationInput(body.text);
+    const hash = crypto.createHash("sha256").update([config.TRANSLATION_MODEL, READING_TRANSLATION_PROMPT_VERSION, READING_TRANSLATION_NORMALIZATION_VERSION, body.targetLanguage, text].join("\0")).digest("hex");
+    const cached = await database.query.readingTranslationUsage.findFirst({ where: and(eq(readingTranslationUsage.userId, user.id), eq(readingTranslationUsage.sentenceHash, hash), eq(readingTranslationUsage.targetLanguage, body.targetLanguage), eq(readingTranslationUsage.provider, config.TRANSLATION_MODEL), eq(readingTranslationUsage.modelVersion, config.TRANSLATION_MODEL), eq(readingTranslationUsage.promptVersion, READING_TRANSLATION_PROMPT_VERSION), eq(readingTranslationUsage.normalizationVersion, READING_TRANSLATION_NORMALIZATION_VERSION), eq(readingTranslationUsage.qualityStatus, "passed")), orderBy: [desc(readingTranslationUsage.occurredAt)] });
     const today = new Date(); today.setHours(0, 0, 0, 0); const usage = await database.query.readingTranslationUsage.findMany({ where: and(eq(readingTranslationUsage.userId, user.id), gte(readingTranslationUsage.occurredAt, today.toISOString())) });
+    if (cached) return { translation: cached.translation, cached: true, remaining: Math.max(0, config.READING_TRANSLATION_DAILY_LIMIT - usage.length) };
     if (usage.length >= config.READING_TRANSLATION_DAILY_LIMIT) return reply.code(429).send({ error: "今天的整句翻译次数已经用完" });
     if (!config.TRANSLATION_BASE_URL || !config.TRANSLATION_API_KEY) return reply.code(503).send({ error: "整句翻译服务尚未配置" });
-    const response = await fetch(`${config.TRANSLATION_BASE_URL.replace(/\/$/, "")}/chat/completions`, { method: "POST", headers: { Authorization: `Bearer ${config.TRANSLATION_API_KEY}`, "Content-Type": "application/json" }, body: JSON.stringify({ model: config.TRANSLATION_MODEL, temperature: 0, messages: [{ role: "system", content: "Translate the supplied English text faithfully into concise Simplified Chinese. Return only the translation." }, { role: "user", content: body.text }] }), signal: AbortSignal.timeout(10_000) });
-    if (!response.ok) return reply.code(502).send({ error: "翻译服务暂时不可用" });
-    const result = await response.json() as { choices?: Array<{ message?: { content?: string } }> }; const translation = result.choices?.[0]?.message?.content?.trim(); if (!translation) return reply.code(502).send({ error: "翻译服务没有返回结果" });
-    await database.insert(readingTranslationUsage).values({ id: crypto.randomUUID(), userId: user.id, sentenceHash: hash, targetLanguage: body.targetLanguage, translation, provider: config.TRANSLATION_MODEL, occurredAt: new Date().toISOString() });
-    return { translation, cached: false, remaining: config.READING_TRANSLATION_DAILY_LIMIT - usage.length - 1 };
+    let lastQualityReason = "";
+    const startedAt = Date.now();
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        const result = await requestTranslation(config, text, attempt === 1);
+        const quality = assessTranslationQuality(text, result.translation, result.finishReason);
+        if (!quality.ok) { lastQualityReason = quality.reason; continue; }
+        await database.insert(readingTranslationUsage).values({ id: crypto.randomUUID(), userId: user.id, sentenceHash: hash, targetLanguage: body.targetLanguage, translation: result.translation, provider: config.TRANSLATION_MODEL, modelVersion: config.TRANSLATION_MODEL, promptVersion: READING_TRANSLATION_PROMPT_VERSION, normalizationVersion: READING_TRANSLATION_NORMALIZATION_VERSION, inputLength: text.length, outputLength: result.translation.length, durationMs: Date.now() - startedAt, retryCount: attempt, finishReason: result.finishReason ?? null, qualityStatus: "passed", occurredAt: new Date().toISOString() });
+        return { translation: result.translation, cached: false, remaining: config.READING_TRANSLATION_DAILY_LIMIT - usage.length - 1 };
+      } catch { if (attempt === 1) return reply.code(502).send({ error: "翻译服务暂时不可用" }); }
+    }
+    return reply.code(502).send({ error: lastQualityReason === "fragment" ? "请选择完整句子后再翻译" : "翻译结果未通过质量检查，请重新选择完整句子" });
   });
 
   app.get("/api/reading/catalog/search", async (request, reply) => {
@@ -187,9 +203,10 @@ export async function registerReadingRoutes(app: FastifyInstance, input: {
     const user = await requireUser(request, reply); if (!user) return;
     const input = catalogBookSchema.parse(request.body); const now = new Date().toISOString();
     const metadata = await openLibraryMetadata(input.title, input.author ?? null);
+    const curated = CURATED_BOOKS.find((item) => item.externalId === input.id);
     const bookId = stableUuid(`gutenberg:${input.id}`);
     await database.insert(readingBooks).values({
-      id: bookId, ownerId: null, visibility: "public", sourceType: "gutenberg", externalId: input.id,
+      id: bookId, ownerId: null, visibility: curated ? "curated" : "public", sourceType: curated ? "builtin" : "gutenberg", externalId: input.id,
       title: metadata?.title ?? input.title, titleZh: null, author: metadata?.author ?? input.author ?? null, authorZh: null,
       description: metadata?.description ?? "由读者从 Project Gutenberg 公版书库加入。", language: "en", format: "epub",
       originalFilename: null, mimeType: "application/epub+zip", storagePath: null, manifestPath: null,
@@ -215,38 +232,51 @@ export async function registerReadingRoutes(app: FastifyInstance, input: {
 async function seedCuratedBooks(database: Database) {
   const now = new Date().toISOString();
   for (const item of CURATED_BOOKS) {
-    await database.insert(readingBooks).values({ id: item.id, ownerId: null, visibility: "curated", sourceType: "gutenberg", externalId: item.externalId, title: item.title, titleZh: item.titleZh, author: item.author, authorZh: null, description: item.description, language: "en", format: "epub", originalFilename: null, mimeType: "application/epub+zip", storagePath: null, manifestPath: null, coverPath: null, byteSize: 0, derivedByteSize: 0, sha256: null, drmStatus: "none", status: "queued", difficulty: item.difficulty, cefrHint: item.cefrHint, wordCount: null, chapterCount: 0, errorCode: null, createdAt: now, updatedAt: now, deletedAt: null }).onConflictDoNothing();
-    // Curated titles are a catalog only. Downloading starts after the learner
-    // explicitly adds a title to their shelf, so a server without outbound
-    // Gutenberg access does not fill the queue with failed background jobs.
-    const shelf = await database.query.readingShelves.findFirst({ where: eq(readingShelves.bookId, item.id) });
-    if (!shelf) {
-      await database.delete(readingImportJobs).where(and(eq(readingImportJobs.bookId, item.id), isNull(readingImportJobs.requestedBy)));
-      const existing = await database.query.readingBooks.findFirst({ where: eq(readingBooks.id, item.id) });
-      if (existing && existing.ownerId === null && existing.status !== "ready") {
-        await database.update(readingBooks).set({ status: "queued", errorCode: null, updatedAt: now }).where(eq(readingBooks.id, item.id));
-      }
+    await database.insert(readingBooks).values({ id: item.id, ownerId: null, visibility: "curated", sourceType: "builtin", externalId: item.externalId, title: item.title, titleZh: item.titleZh, author: item.author, authorZh: null, description: item.description, language: "en", format: "epub", originalFilename: null, mimeType: "application/epub+zip", storagePath: null, manifestPath: null, coverPath: null, byteSize: 0, derivedByteSize: 0, sha256: null, drmStatus: "none", status: "queued", difficulty: item.difficulty, cefrHint: item.cefrHint, wordCount: null, chapterCount: 0, errorCode: null, createdAt: now, updatedAt: now, deletedAt: null }).onConflictDoNothing();
+    const existing = await database.query.readingBooks.findFirst({ where: eq(readingBooks.id, item.id) });
+    if (existing && (existing.sourceType !== "builtin" || existing.status !== "ready" || !existing.manifestPath)) {
+      await database.update(readingBooks).set({ visibility: "curated", sourceType: "builtin", externalId: item.externalId, title: item.title, titleZh: item.titleZh, author: item.author, description: item.description, storagePath: null, manifestPath: null, byteSize: 0, derivedByteSize: 0, sha256: null, drmStatus: "none", status: "queued", errorCode: null, updatedAt: now }).where(eq(readingBooks.id, item.id));
     }
   }
 }
 
 async function processTextBook(database: Database, root: string, book: typeof readingBooks.$inferInsert, body: Buffer, jobId: string) {
-  const text = stripMarkup(body.toString("utf8")); const manifest = textManifest(book.title, text); const manifestPath = path.join(path.dirname(path.join(root, book.storagePath!)), "manifest.json");
+  const text = sanitizeReadingText(stripMarkup(body.toString("utf8")), book.sourceType); const manifest = buildReadingManifest(book.title, text); const manifestPath = path.join(path.dirname(path.join(root, book.storagePath!)), "manifest.json");
   await fs.writeFile(manifestPath, JSON.stringify(manifest), { mode: 0o600 }); const now = new Date().toISOString();
   await database.update(readingBooks).set({ manifestPath: relativeReadingPath(root, manifestPath), status: "ready", drmStatus: "none", wordCount: text.match(/[A-Za-z]+(?:['’-][A-Za-z]+)*/g)?.length ?? 0, chapterCount: manifest.chapters.length, derivedByteSize: Buffer.byteLength(JSON.stringify(manifest)), updatedAt: now }).where(eq(readingBooks.id, book.id!));
   await database.update(readingImportJobs).set({ status: "ready", progress: 100, workerVersion: "inline-text-v1", completedAt: now }).where(eq(readingImportJobs.id, jobId));
 }
 
-function textManifest(title: string, text: string): Manifest { const normalized = text.replace(/\r\n?/g, "\n").trim(); const chunks = normalized.split(/\n(?=(?:chapter|part)\s+[ivxlcdm\d]+\b)/i).filter(Boolean); return { version: 1, title, chapters: (chunks.length ? chunks : [normalized]).map((chunk, index) => ({ title: chunk.match(/^\s*((?:chapter|part)\s+[^\n]{1,100})/i)?.[1]?.trim() ?? (index ? `第 ${index + 1} 章` : title), text: chunk.trim() })) }; }
 function stripMarkup(value: string) { return value.replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ").replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&").replace(/[ \t]+/g, " "); }
 async function readManifest(root: string, relative: string) { return JSON.parse(await fs.readFile(path.resolve(root, relative), "utf8")) as Manifest; }
+async function requestTranslation(config: AppConfig, text: string, retry: boolean): Promise<{ translation: string; finishReason?: string }> {
+  const response = await fetch(`${config.TRANSLATION_BASE_URL!.replace(/\/$/, "")}/chat/completions`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${config.TRANSLATION_API_KEY!}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: config.TRANSLATION_MODEL,
+      temperature: 0,
+      max_tokens: Math.min(2_048, Math.max(128, Math.ceil(text.length * 1.5))),
+      messages: [
+        { role: "system", content: retry ? `${READING_TRANSLATION_SYSTEM_PROMPT} This is a retry: check that the result is complete Chinese and has no English tail.` : READING_TRANSLATION_SYSTEM_PROMPT },
+        { role: "user", content: text },
+      ],
+    }),
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!response.ok) throw new Error(`translation_${response.status}`);
+  const result = await response.json() as { choices?: Array<{ message?: { content?: string }; finish_reason?: string }> };
+  const choice = result.choices?.[0]; const translation = choice?.message?.content?.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+  if (!translation) throw new Error("translation_empty");
+  return choice?.finish_reason ? { translation, finishReason: choice.finish_reason } : { translation };
+}
 async function accessibleBook(database: Database, userId: string, bookId: string) { const book = await database.query.readingBooks.findFirst({ where: eq(readingBooks.id, bookId) }); return book && (book.ownerId === userId || book.visibility !== "private") && book.status !== "deleted" ? book : undefined; }
 async function ensureShelf(database: Database, userId: string, bookId: string) { const existing = await database.query.readingShelves.findFirst({ where: and(eq(readingShelves.userId, userId), eq(readingShelves.bookId, bookId)) }); if (existing) return existing; const row = { userId, bookId, state: "unread" as const, currentChapter: 0, currentOffset: 0, progress: 0, furthestProgress: 0, preferences: defaultPreferences(), addedAt: new Date().toISOString(), lastReadAt: null, finishedAt: null }; await database.insert(readingShelves).values(row); return row; }
 function publicBook(book: typeof readingBooks.$inferSelect, shelf?: typeof readingShelves.$inferSelect) { return { id: book.id, externalId: book.externalId, title: book.title, titleZh: book.titleZh, author: book.author, description: book.description, language: book.language, format: book.format, visibility: book.visibility, sourceType: book.sourceType, status: book.status, difficulty: book.difficulty, cefrHint: book.cefrHint, wordCount: book.wordCount, chapterCount: book.chapterCount, byteSize: book.byteSize + book.derivedByteSize, drmStatus: book.drmStatus, shelved: Boolean(shelf), progress: shelf?.progress ?? 0, furthestProgress: shelf?.furthestProgress ?? 0, currentChapter: shelf?.currentChapter ?? 0, preferences: shelf?.preferences ?? defaultPreferences(), lastReadAt: shelf?.lastReadAt ?? null }; }
 function defaultPreferences() { return { mode: "scroll", fontScale: 1, lineHeight: 1.9, theme: "paper", publisherStyles: false }; }
 function relativeReadingPath(root: string, absolute: string) { return path.relative(path.resolve(root), absolute); }
 function safeExtension(value: string) { return value.replace(/[^a-z0-9]/g, "").slice(0, 12) || "bin"; }
-function inferLemma(value: string) { const term = value.toLocaleLowerCase("en-US").replace(/^[^a-z]+|[^a-z]+$/g, ""); const irregular: Record<string, string> = { went: "go", gone: "go", children: "child", mice: "mouse", better: "good", best: "good" }; if (irregular[term]) return irregular[term]; if (term.endsWith("ies") && term.length > 4) return `${term.slice(0, -3)}y`; if (term.endsWith("ing") && term.length > 5) return term.slice(0, -3).replace(/(.)\1$/, "$1"); if (term.endsWith("ed") && term.length > 4) return term.slice(0, -2); if (term.endsWith("s") && !term.endsWith("ss") && term.length > 3) return term.slice(0, -1); return term; }
+function inferLemma(value: string) { const term = value.toLocaleLowerCase("en-US").replace(/^[^a-z]+|[^a-z]+$/g, ""); const irregular: Record<string, string> = { went: "go", gone: "go", children: "child", mice: "mouse", better: "good", best: "good", located: "locate", created: "create", stated: "state" }; if (irregular[term]) return irregular[term]; if (term.endsWith("ies") && term.length > 4) return `${term.slice(0, -3)}y`; if (term.endsWith("ing") && term.length > 5) return term.slice(0, -3).replace(/(.)\1$/, "$1"); if (term.endsWith("ed") && term.length > 4) { const base = term.slice(0, -2); return base.endsWith("at") || base.endsWith("it") ? `${base}e` : base; } if (term.endsWith("s") && !term.endsWith("ss") && term.length > 3) return term.slice(0, -1); return term; }
 function parseGutenbergOpds(xml: string) { return Array.from(xml.matchAll(/<entry>([\s\S]*?)<\/entry>/g)).slice(0, 30).map((match) => { const entry = match[1] ?? ""; const id = entry.match(/<id>[^<]*ebooks\/(\d+)<\/id>/)?.[1] ?? entry.match(/\/ebooks\/(\d+)/)?.[1] ?? ""; const title = decodeXml(entry.match(/<title>([\s\S]*?)<\/title>/)?.[1] ?? ""); const author = decodeXml(entry.match(/<name>([\s\S]*?)<\/name>/)?.[1] ?? ""); const downloadUrl = entry.match(/<link[^>]+type="application\/epub\+zip"[^>]+href="([^"]+)"/)?.[1] ?? null; return { id, title, author, downloadUrl: downloadUrl ? decodeXml(downloadUrl) : null, sourceUrl: id ? `https://www.gutenberg.org/ebooks/${id}` : null }; }).filter((item) => item.id && item.title); }
 function decodeXml(value: string) { return value.replace(/<!\[CDATA\[|\]\]>/g, "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').trim(); }
 async function openLibraryMetadata(title: string, author: string | null) { try { const query = new URLSearchParams({ title, limit: "1", fields: "title,author_name,first_publish_year" }); if (author) query.set("author", author); const response = await fetch(`https://openlibrary.org/search.json?${query}`, { headers: { "User-Agent": "ZhuguangEnglish/2.0 (educational reader)" }, signal: AbortSignal.timeout(6_000) }); if (!response.ok) return null; const result = await response.json() as { docs?: Array<{ title?: string; author_name?: string[]; first_publish_year?: number }> }; const row = result.docs?.[0]; if (!row) return null; return { title: row.title?.trim() || title, author: row.author_name?.[0]?.trim() || author, description: row.first_publish_year ? `Open Library 元数据：首次出版于 ${row.first_publish_year} 年。` : "元数据来自 Open Library。" }; } catch { return null; } }
@@ -255,6 +285,6 @@ const CURATED_BOOKS = ([
   ["14838", "The Tale of Peter Rabbit", "彼得兔的故事", "Beatrix Potter", "entry", "A2–B1"], ["55", "The Wonderful Wizard of Oz", "绿野仙踪", "L. Frank Baum", "entry", "A2–B1"], ["7256", "The Gift of the Magi", "麦琪的礼物", "O. Henry", "entry", "B1"], ["43", "The Strange Case of Dr. Jekyll and Mr. Hyde", "化身博士", "Robert Louis Stevenson", "entry", "B1"],
   ["1661", "The Adventures of Sherlock Holmes", "福尔摩斯冒险史", "Arthur Conan Doyle", "intermediate", "B1–B2"], ["35", "The Time Machine", "时间机器", "H. G. Wells", "intermediate", "B1–B2"], ["23", "Narrative of the Life of Frederick Douglass", "弗雷德里克·道格拉斯自传", "Frederick Douglass", "intermediate", "B2"], ["535", "Travels with a Donkey in the Cévennes", "携驴旅行记", "Robert Louis Stevenson", "intermediate", "B2"],
   ["84", "Frankenstein", "弗兰肯斯坦", "Mary Shelley", "challenge", "B2–C1"], ["1342", "Pride and Prejudice", "傲慢与偏见", "Jane Austen", "challenge", "B2–C1"], ["205", "Walden", "瓦尔登湖", "Henry David Thoreau", "challenge", "C1"], ["1228", "On the Origin of Species", "物种起源", "Charles Darwin", "challenge", "C1"],
-] as const).map(([externalId, title, titleZh, author, difficulty, cefrHint]) => ({ id: stableUuid(`gutenberg:${externalId}`), externalId, title, titleZh, author, difficulty, cefrHint, description: "Project Gutenberg 公版英文原著，难度为系统估算。" }));
+] as const).map(([externalId, title, titleZh, author, difficulty, cefrHint]) => ({ id: stableUuid(`gutenberg:${externalId}`), externalId, title, titleZh, author, difficulty, cefrHint, description: "本地内置的无 DRM 英文公版原著，难度为系统估算。" }));
 
 function stableUuid(value: string) { const hash = crypto.createHash("sha256").update(value).digest("hex"); return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-4${hash.slice(13, 16)}-a${hash.slice(17, 20)}-${hash.slice(20, 32)}`; }

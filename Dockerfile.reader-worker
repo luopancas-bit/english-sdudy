@@ -23,5 +23,6 @@ COPY --from=build --chown=zhuguang:zhuguang /app/node_modules ./node_modules
 COPY --from=build --chown=zhuguang:zhuguang /app/apps/api/node_modules ./apps/api/node_modules
 COPY --from=build --chown=zhuguang:zhuguang /app/apps/api/dist ./apps/api/dist
 COPY --from=build --chown=zhuguang:zhuguang /app/packages ./packages
+COPY --chown=zhuguang:zhuguang reading-samples/ /app/reading-samples/
 USER zhuguang
 CMD ["node", "apps/api/dist/reading-worker.js"]

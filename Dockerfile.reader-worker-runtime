@@ -21,6 +21,7 @@ COPY --chown=10001:10001 packages/database/ /app/packages/database/
 COPY --chown=10001:10001 packages/domain/ /app/packages/domain/
 COPY --from=app-runtime --chown=10001:10001 /app/packages/database/node_modules/ /app/packages/database/node_modules/
 COPY --from=app-runtime --chown=10001:10001 /app/packages/domain/node_modules/ /app/packages/domain/node_modules/
+COPY --chown=10001:10001 reading-samples/ /app/reading-samples/
 
 USER 10001:10001
 
