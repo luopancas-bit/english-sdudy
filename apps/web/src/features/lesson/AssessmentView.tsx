@@ -238,7 +238,7 @@ function QuestionAudio({ url, mode, start, end }: { url: string; mode?: "word" |
     }
     try {
       await loadMetadata(audio);
-      audio.currentTime = start ?? 0;
+      seekToSegmentStart(audio, start);
       audio.playbackRate = speed;
       await audio.play();
       setState("playing");
@@ -264,19 +264,19 @@ function QuestionAudio({ url, mode, start, end }: { url: string; mode?: "word" |
         src={url}
         onLoadedMetadata={() => {
           const audio = audioRef.current;
-          if (audio && start !== undefined) audio.currentTime = start;
+          if (audio) seekToSegmentStart(audio, start);
         }}
         onPlay={() => {
           const audio = audioRef.current;
           if (audio && start !== undefined && (audio.currentTime < start || (end !== undefined && audio.currentTime >= end))) {
-            audio.currentTime = start;
+            seekToSegmentStart(audio, start);
           }
         }}
         onTimeUpdate={() => {
           const audio = audioRef.current;
           if (audio && end !== undefined && audio.currentTime >= end) {
             audio.pause();
-            if (start !== undefined) audio.currentTime = start;
+            seekToSegmentStart(audio, start);
             setState("played");
           }
         }}
@@ -285,6 +285,15 @@ function QuestionAudio({ url, mode, start, end }: { url: string; mode?: "word" |
       />
     </div>
   );
+}
+
+function seekToSegmentStart(audio: HTMLAudioElement, start: number | undefined) {
+  if (start === undefined || !Number.isFinite(start) || Math.abs(audio.currentTime - start) < 0.05) return;
+  try {
+    audio.currentTime = start;
+  } catch {
+    // Browsers can reject a seek until metadata is available; onPlay retries it.
+  }
 }
 
 function SpeechAnswer({

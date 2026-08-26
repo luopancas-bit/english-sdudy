@@ -815,11 +815,11 @@ export async function createApp(
       const audioPath = path.resolve(contentRoot, dictionaryAudio.storagePath);
       if (!audioPath.startsWith(contentRoot + path.sep)) return reply.code(404).send({ error: "音频资源路径无效" });
       const data = await fs.readFile(audioPath);
-      return reply.type(dictionaryAudio.mimeType).header("Cache-Control", "private, max-age=86400").send(data);
+      return sendAudio(reply, request, data, dictionaryAudio.mimeType);
     }
    const audio = await content.vocabularyAudio(entry.term, params.accent);
     if (!audio) return reply.code(404).send({ error: "该口音音频待补全" });
-    return reply.type(audio.mimeType).header("Cache-Control", "private, max-age=86400").send(audio.data);
+    return sendAudio(reply, request, audio.data, audio.mimeType);
   });
 
   app.get("/api/lessons/:lessonId/audio/:accent", async (request, reply) => {
@@ -831,7 +831,7 @@ export async function createApp(
     }).parse(request.params);
     const audio = await content.lessonAudio(params.lessonId, params.accent);
     if (!audio) return reply.code(404).send({ error: "本课音频资源尚未部署" });
-    return reply.type("audio/mpeg").header("Cache-Control", "private, max-age=86400").send(audio);
+    return sendAudio(reply, request, audio, "audio/mpeg");
   });
 
   app.get("/api/word-memory/chapters/:lessonId/assessment-audio/:itemIndex/:accent", async (request, reply) => {
@@ -846,7 +846,7 @@ export async function createApp(
     if (!item) return reply.code(404).send({ error: "本课没有这个考核词条" });
     const audio = await content.vocabularyAudio(item.term, params.accent);
     if (!audio) return reply.code(404).send({ error: "本词音频尚未部署" });
-    return reply.type(audio.mimeType).header("Cache-Control", "private, max-age=86400").send(audio.data);
+    return sendAudio(reply, request, audio.data, audio.mimeType);
   });
 
   app.get("/api/lessons/:lessonId/assessment-audio/:questionId/:accent", async (request, reply) => {
@@ -859,7 +859,7 @@ export async function createApp(
     }).parse(request.params);
     const audio = await content.assessmentWordAudio(params.lessonId, params.questionId, params.accent);
     if (!audio) return reply.code(404).send({ error: "本题单词音频尚未部署" });
-    return reply.type(audio.mimeType).header("Cache-Control", "private, max-age=86400").send(audio.data);
+    return sendAudio(reply, request, audio.data, audio.mimeType);
   });
 
   app.get("/api/lessons/:lessonId/assessment-draft", async (request, reply) => {
@@ -1058,6 +1058,52 @@ function publicVocabularyEntry(entry: {
     updatedAt: entry.updatedAt,
     pronunciation: pronunciation ?? emptyPronunciation(),
   };
+}
+
+function sendAudio(reply: FastifyReply, request: FastifyRequest, data: Buffer, mimeType: string) {
+  const commonHeaders = {
+    "Accept-Ranges": "bytes",
+    "Cache-Control": "private, max-age=86400",
+    "Content-Length": String(data.byteLength),
+  };
+  const rangeHeader = request.headers.range;
+  if (typeof rangeHeader !== "string") {
+    return reply.type(mimeType).headers(commonHeaders).send(data);
+  }
+
+  const range = /^bytes=(\d*)-(\d*)$/u.exec(rangeHeader.trim());
+  if (!range || data.byteLength === 0) {
+    return reply.code(416).type("text/plain").header("Content-Range", `bytes */${data.byteLength}`).send("Range Not Satisfiable");
+  }
+  const requestedStart = range[1] ? Number(range[1]) : null;
+  const requestedEnd = range[2] ? Number(range[2]) : null;
+  let start = requestedStart;
+  let end = requestedEnd;
+  if (start === null) {
+    const suffixLength = end ?? 0;
+    if (suffixLength <= 0) {
+      return reply.code(416).type("text/plain").header("Content-Range", `bytes */${data.byteLength}`).send("Range Not Satisfiable");
+    }
+    start = Math.max(0, data.byteLength - suffixLength);
+    end = data.byteLength - 1;
+  } else {
+    if (start < 0 || start >= data.byteLength) {
+      return reply.code(416).type("text/plain").header("Content-Range", `bytes */${data.byteLength}`).send("Range Not Satisfiable");
+    }
+    end = end === null ? data.byteLength - 1 : Math.min(end, data.byteLength - 1);
+  }
+  if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || end < start) {
+    return reply.code(416).type("text/plain").header("Content-Range", `bytes */${data.byteLength}`).send("Range Not Satisfiable");
+  }
+  const body = data.subarray(start, end + 1);
+  return reply.code(206)
+    .type(mimeType)
+    .headers({
+      ...commonHeaders,
+      "Content-Length": String(body.byteLength),
+      "Content-Range": `bytes ${start}-${end}/${data.byteLength}`,
+    })
+    .send(body);
 }
 
 type PronunciationRecord = Awaited<ReturnType<LearningRepository["pronunciationsForTerms"]>>[number];

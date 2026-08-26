@@ -299,6 +299,24 @@ describe("learning account flow", () => {
     expect(listeningWordAudio.headers["content-type"]).toContain("audio/mp4");
     expect(listeningWordAudio.body).toBe("word-audio");
 
+    const listeningWordAudioRange = await app.inject({
+      method: "GET",
+      url: "/api/lessons/1/assessment-audio/l1/us",
+      headers: { cookie, range: "bytes=0-3" },
+    });
+    expect(listeningWordAudioRange.statusCode).toBe(206);
+    expect(listeningWordAudioRange.headers["accept-ranges"]).toBe("bytes");
+    expect(listeningWordAudioRange.headers["content-range"]).toBe("bytes 0-3/10");
+    expect(listeningWordAudioRange.body).toBe("word");
+
+    const invalidAudioRange = await app.inject({
+      method: "GET",
+      url: "/api/lessons/1/assessment-audio/l1/us",
+      headers: { cookie, range: "bytes=99-" },
+    });
+    expect(invalidAudioRange.statusCode).toBe(416);
+    expect(invalidAudioRange.headers["content-range"]).toBe("bytes */10");
+
     const mapBeforeFormal = await app.inject({
       method: "GET",
       url: "/api/course-map",
