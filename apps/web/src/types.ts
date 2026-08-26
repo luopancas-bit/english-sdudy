@@ -242,6 +242,10 @@ export interface DictionaryStatusData {
     pending: number;
     ambiguous: number;
     openConflicts: number;
+    missingUs: number;
+    missingUk: number;
+    pendingSingle: number;
+    pendingPhrase: number;
   };
   sources: Array<{
     id: string;

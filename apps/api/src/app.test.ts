@@ -548,7 +548,19 @@ describe("learning account flow", () => {
     const dictionaryStatus = await app.inject({ method: "GET", url: "/api/dictionaries/status", headers: { cookie } });
     expect(dictionaryStatus.statusCode).toBe(200);
     expect(dictionaryStatus.json()).toMatchObject({
-      summary: { entries: 1, us: 1, uk: 1, dual: 1, pending: 0, ambiguous: 1, openConflicts: 2 },
+      summary: {
+        entries: 1,
+        us: 1,
+        uk: 1,
+        dual: 1,
+        pending: 0,
+        ambiguous: 1,
+        openConflicts: 2,
+        missingUs: 0,
+        missingUk: 0,
+        pendingSingle: 0,
+        pendingPhrase: 0,
+      },
       sources: [
         { id: "test-ipa@1", status: "active", priority: 10 },
         { id: "test-ipa-alternative@1", status: "active", priority: 20 },

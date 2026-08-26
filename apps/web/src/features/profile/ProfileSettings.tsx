@@ -99,6 +99,9 @@ function DictionaryStatus({ demo }: { demo: boolean }) {
             <span><small>待补全</small><strong>{data.summary.pending}</strong></span>
             <span><small>待核对</small><strong>{data.summary.ambiguous + data.summary.openConflicts}</strong></span>
           </div>
+          <p className="dictionary-status-note">
+            待补全包含 {data.summary.pendingSingle} 个单词、{data.summary.pendingPhrase} 个短语；当前缺少美音 {data.summary.missingUs} 条、英音 {data.summary.missingUk} 条。待补全内容不会被猜测填入，后续导入可靠词典后会自动更新。
+          </p>
           <div className="dictionary-source-list">
             {data.sources.map((source) => (
               <article key={source.id}>
@@ -251,7 +254,19 @@ const demoSessions: AccountSession[] = [
 ];
 
 const demoDictionaryStatus: DictionaryStatusData = {
-  summary: { entries: 1770, us: 1420, uk: 1396, dual: 1368, pending: 402, ambiguous: 7, openConflicts: 2 },
+  summary: {
+    entries: 1770,
+    us: 1420,
+    uk: 1396,
+    dual: 1368,
+    pending: 402,
+    ambiguous: 7,
+    openConflicts: 2,
+    missingUs: 350,
+    missingUk: 374,
+    pendingSingle: 288,
+    pendingPhrase: 114,
+  },
   sources: [
     { id: "course-core@1", name: "课程核心词典", version: "1", format: "builtin", status: "active", priority: 10, importedAt: "2026-08-14T00:00:00.000Z" },
   ],

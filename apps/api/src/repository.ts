@@ -357,6 +357,7 @@ export class LearningRepository {
     const activeRows = rows.filter((row) => activeSourceIds.has(row.sourceId));
     const us = new Set(activeRows.filter((row) => row.accent === "us" && row.ipa).map((row) => row.entryId));
     const uk = new Set(activeRows.filter((row) => row.accent === "uk" && row.ipa).map((row) => row.entryId));
+    const pendingEntries = entries.filter((entry) => entry.status === "pending");
     return {
       summary: {
         entries: entries.length,
@@ -366,6 +367,10 @@ export class LearningRepository {
         pending: entries.filter((entry) => entry.status === "pending").length,
         ambiguous: entries.filter((entry) => entry.status === "ambiguous").length,
         openConflicts: conflicts.filter((conflict) => conflict.status === "open").length,
+        missingUs: entries.filter((entry) => !us.has(entry.id)).length,
+        missingUk: entries.filter((entry) => !uk.has(entry.id)).length,
+        pendingSingle: pendingEntries.filter((entry) => entry.term.trim().split(/\s+/).length === 1).length,
+        pendingPhrase: pendingEntries.filter((entry) => entry.term.trim().split(/\s+/).length > 1).length,
       },
       sources: sources.map((source) => ({
         id: source.id,
